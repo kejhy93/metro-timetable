@@ -1,4 +1,4 @@
- package org.hejnaluk.metrotimetable.client;
+package org.hejnaluk.metrotimetable.client;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,50 +21,57 @@ import java.util.zip.ZipInputStream;
 public class PIDClient {
 
     @Value("${pid.client.path:''}")
-    private String PATH_TO_FILE;
+    private String pathTOFile;
 
     private WebClient webClient;
 
     @Autowired
     public PIDClient(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl(PATH_TO_FILE).build();
+        this.webClient = webClientBuilder.baseUrl(pathTOFile).build();
     }
 
     public void getData() {
         log.info("PIDClient");
         // Use WebClient to download the ZIP file as a byte array
-        Mono<String> result = webClient
+        webClient
                 .get()
                 .header(HttpHeaders.ACCEPT, "application/zip")
                 .retrieve()
                 .bodyToMono(byte[].class)
                 .flatMap(this::extractZipInMemory)
                 .then(Mono.just("ZIP file downloaded and extracted successfully in memory!"))
-                .onErrorResume(e -> Mono.just("Failed to download or extract ZIP: " + e.getMessage()));
+                .onErrorResume(e -> {
+                    log.error("Failed to download or extract ZIP", e);
+                    return Mono.error(e);
+                });
     }
 
     // Method to extract the ZIP file in memory from a byte array
     private Mono<Void> extractZipInMemory(byte[] zipData) {
+        if (zipData == null) {
+            log.error("Zip data is null");
+            return Mono.error(new IllegalArgumentException("Zip data must not be null"));
+        }
         try (InputStream inputStream = new java.io.ByteArrayInputStream(zipData);
              ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
 
             ZipEntry entry;
             while ((entry = zipInputStream.getNextEntry()) != null) {
-                System.out.println("Extracting: " + entry.getName());
+                log.info("Extracting: {}", entry.getName());
 
                 // If the entry is a file, read the content
                 if (!entry.isDirectory()) {
-                    ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[1024];
-                    int length;
-                    while ((length = zipInputStream.read(buffer)) > 0) {
-                        fileOutputStream.write(buffer, 0, length);
+                    try(ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[1024];
+                        int length;
+                        while ((length = zipInputStream.read(buffer)) > 0) {
+                            fileOutputStream.write(buffer, 0, length);
+                        }
+
+                        // File content is now in memory
+                        byte[] fileContent = fileOutputStream.toByteArray();
+                        log.info("File size: {} bytes", fileContent.length);
                     }
-
-                    // File content is now in memory
-                    byte[] fileContent = fileOutputStream.toByteArray();
-                    System.out.println("File size: " + fileContent.length + " bytes");
-
                     // You can process the file content here (e.g., store, analyze, etc.)
                 }
 
@@ -73,6 +80,7 @@ public class PIDClient {
 
             return Mono.empty();
         } catch (IOException e) {
+            log.error("Failed to download data.", e);
             return Mono.error(e);
         }
     }

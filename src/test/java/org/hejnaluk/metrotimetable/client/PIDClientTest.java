@@ -20,8 +20,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 class PIDClientTest {
 
 
-    PIDClient client;
+    private PIDClient client;
+
     private MockWebServer server;
+
     @Autowired
     private WebClient.Builder webClientBuilder;
 
@@ -50,7 +52,7 @@ class PIDClientTest {
     }
 
     @Test
-    public void testClient() {
+    void testClient() {
         // Expect a request to a specific URL and mock a response
         byte[] zipContent = null;
         try {
