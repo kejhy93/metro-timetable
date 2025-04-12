@@ -118,9 +118,9 @@ public class ParseTimetableService {
         final var stopTimesList = parseStopTime();
         final var tripList = parseTrip();
 
-        log.info("Routes: {}", routesList.stream().map(Route :: toString).collect(Collectors.joining(", ", "[ ", " ]")));
-        log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop :: toString).collect(Collectors.joining(", ", "[", " ]")));
-        log.info("Stops: {}", stopsList.stream().map(Stop :: toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.info("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
+        log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
         final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList);
     }
@@ -133,10 +133,10 @@ public class ParseTimetableService {
             final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, SECOND_DIRECTION);
 
             log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
-                    .map(Stop :: toString)
+                    .map(Stop::toString)
                     .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
             log.info("Route stops for second direction: {}", stopsListSecondDirection.stream()
-                    .map(Stop :: toString)
+                    .map(Stop::toString)
                     .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
 
             final var firstRouteLine = RouteLine.builder()
@@ -240,8 +240,8 @@ public class ParseTimetableService {
                     final var stopId = routeStop.stopId;
                     return stopsList.stream().filter(stop -> stopId.equals(stop.stopId)).findAny();
                 })
-                .filter(Optional :: isPresent)
-                .map(Optional :: get)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toList();
     }
 
@@ -270,7 +270,7 @@ public class ParseTimetableService {
                             .build())
                     .toList();
         } catch (IOException e) {
-            log.error("Error reading file: {}", STOPS_FILE_NAME, e);
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
             return List.of();
         }
     }
@@ -334,7 +334,7 @@ public class ParseTimetableService {
                             .build())
                     .toList();
         } catch (IOException e) {
-            log.error("Error reading file: {}", ROUTES_FILE_NAME, e);
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTES_FILE_NAME, e);
             return List.of();
         }
     }
