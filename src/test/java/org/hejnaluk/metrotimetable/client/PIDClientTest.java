@@ -48,7 +48,7 @@ class PIDClientTest {
         server = new MockWebServer();
         server.start();
 
-        client = new PIDClient(webClientBuilder);
+        client = new PIDClient(webClientBuilder, "http://localhost:" + server.getPort());
     }
 
     @Test

@@ -20,14 +20,22 @@ import java.util.zip.ZipInputStream;
 @Slf4j
 public class PIDClient {
 
-    @Value("${pid.client.path:''}")
     private String pathTOFile;
 
     private WebClient webClient;
 
     @Autowired
-    public PIDClient(WebClient.Builder webClientBuilder) {
-        this.webClient = webClientBuilder.baseUrl(pathTOFile).build();
+    public PIDClient(WebClient.Builder webClientBuilder,
+                     @Value("${pid.client.path:''}")
+                     String pathTOFile) {
+        this.pathTOFile = pathTOFile;
+        log.info("Init PIDClient address is: {}", pathTOFile);
+        this.webClient = webClientBuilder
+                .baseUrl(pathTOFile)
+                .codecs(config -> config
+                        .defaultCodecs()
+                        .maxInMemorySize(128 * 1024 * 1024)) // 128 MB
+                .build();
     }
 
     public void getData() {
