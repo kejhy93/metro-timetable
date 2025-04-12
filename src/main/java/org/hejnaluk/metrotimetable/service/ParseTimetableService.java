@@ -20,18 +20,18 @@ import java.util.stream.Collectors;
 public class ParseTimetableService {
 
     /**
-    * Get path to the file containing routes information
-    * <p>
-    * format:
-    * route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
-    * <p>
-    * route_id,route_short_name,route_long_name,route_url,route_color,route_text_color
-    * */
+     * Get path to the file containing routes information
+     * <p>
+     * format:
+     * route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
+     * <p>
+     * route_id,route_short_name,route_long_name,route_url,route_color,route_text_color
+     */
     public static final String ROUTES_FILE_NAME = "routes.txt";
 
     /**
-    * Columns key for routes.txt
-    * */
+     * Columns key for routes.txt
+     */
     public static final int ROUTE_ROUTE_ID = 0;
     public static final int ROUTE_ROUTE_SHORT_NAME = 2;
     public static final int ROUTE_ROUTE_LONG_NAME = 3;
@@ -56,8 +56,8 @@ public class ParseTimetableService {
     public static final int STOPS_STOP_NAME = 1;
 
     /**
-    * Expected set of routes to be parsed
-    * */
+     * Expected set of routes to be parsed
+     */
     public static final Set<String> ROUTE_IDS = Set.of("L991", "L992", "L993");
 
     /**
@@ -66,7 +66,7 @@ public class ParseTimetableService {
     public static final String ROUTE_STOPS_FILE_NAME = "route_stops.txt";
     /**
      * Columns key for route_stops.txt
-     * */
+     */
     public static final int ROUTE_STOP_ROUTE_ID = 0;
     public static final int ROUTE_STOP_DIRECTION_ID = 1;
     public static final int ROUTE_STOP_STOP_ID = 2;
@@ -90,10 +90,10 @@ public class ParseTimetableService {
 
     /**
      * Get path to the file containing trips information
-     *
+     * <p>
      * format:
      * route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed,exceptional,sub_agency_id
-     *
+     * <p>
      * route_id,trip_id,trip_headsign,trip_short_name,direction_id
      */
     public static final String TRIP_FILE_NAME = "trips.txt";
@@ -118,9 +118,9 @@ public class ParseTimetableService {
         final var stopTimesList = parseStopTime();
         final var tripList = parseTrip();
 
-        log.info("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
-        log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
-        log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.info("Routes: {}", routesList.stream().map(Route :: toString).collect(Collectors.joining(", ", "[ ", " ]")));
+        log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop :: toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.info("Stops: {}", stopsList.stream().map(Stop :: toString).collect(Collectors.joining(", ", "[", " ]")));
 
         final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList);
     }
@@ -144,10 +144,6 @@ public class ParseTimetableService {
         }
     }
 
-    @Builder
-    record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
-    }
-
     private List<StopTime> parseStopTime() {
         try {
             return Files.readString(Path.of(STOP_TIME_FILE_NAME))
@@ -166,22 +162,18 @@ public class ParseTimetableService {
         }
     }
 
-    @Builder
-    record StopTime(String tripId, String arrivalTime, String departureTime, String stopId) {
-    }
-
     private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList) {
         final var routeLinesList = new ArrayList<RouteLine>();
-        for ( final var routeId : routeIds) {
+        for (final var routeId : routeIds) {
             log.info("Calculate route line for routeId: {}", routeId);
             final var stopsListFirstDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, FIRST_DIRECTION);
             final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, SECOND_DIRECTION);
 
             log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
-                    .map(Stop::toString)
+                    .map(Stop :: toString)
                     .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
             log.info("Route stops for second direction: {}", stopsListSecondDirection.stream()
-                    .map(Stop::toString)
+                    .map(Stop :: toString)
                     .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
 
             final var firstRouteLine = RouteLine.builder()
@@ -220,13 +212,9 @@ public class ParseTimetableService {
                     final var stopId = routeStop.stopId;
                     return stopsList.stream().filter(stop -> stopId.equals(stop.stopId)).findAny();
                 })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                .filter(Optional :: isPresent)
+                .map(Optional :: get)
                 .toList();
-    }
-
-    @Builder
-    record RouteLine(String routeId, String directionId, List<Stop> stops) {
     }
 
     private List<Stop> parseStops() {
@@ -287,6 +275,18 @@ public class ParseTimetableService {
     }
 
     @Builder
+    record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
+    }
+
+    @Builder
+    record StopTime(String tripId, String arrivalTime, String departureTime, String stopId) {
+    }
+
+    @Builder
+    record RouteLine(String routeId, String directionId, List<Stop> stops) {
+    }
+
+    @Builder
     record Stop(String stopId, String stopName) {
     }
 
@@ -295,6 +295,7 @@ public class ParseTimetableService {
     }
 
     @Builder
-    record Route(String routeId, String routeShortName, String routeLongName, String routeUrl, String routeColor, String routeTextColor) {
+    record Route(String routeId, String routeShortName, String routeLongName, String routeUrl, String routeColor,
+                 String routeTextColor) {
     }
 }
