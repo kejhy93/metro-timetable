@@ -21,10 +21,10 @@ public class ParseTimetableService {
 
     /**
     * Get path to the file containing routes information
-    *
+    * <p>
     * format:
     * route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
-    *
+    * <p>
     * route_id,route_short_name,route_long_name,route_url,route_color,route_text_color
     * */
     public static final String ROUTES_FILE_NAME = "routes.txt";
@@ -41,10 +41,10 @@ public class ParseTimetableService {
 
     /**
      * Get path to the file containing stops information
-     *
+     * <p>
      * format:
      * stop_id,stop_name,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,wheelchair_boarding,level_id,platform_code,asw_node_id,asw_stop_id,zone_region_type
-     *
+     * <p>
      * stop_id,stop_name
      */
     public static final String STOPS_FILE_NAME = "stops.txt";
@@ -55,11 +55,6 @@ public class ParseTimetableService {
     public static final int STOPS_STOP_ID = 0;
     public static final int STOPS_STOP_NAME = 1;
 
-
-    /**
-    * Set of all interesting columns
-    * */
-    public static final Set<Integer> ROUTE_COLUMNS = Set.of(ROUTE_ROUTE_ID, ROUTE_ROUTE_SHORT_NAME, ROUTE_ROUTE_LONG_NAME, ROUTE_ROUTE_URL, ROUTE_ROUTE_COLOR, ROUTE_ROUTE_TEXT_COLOR);
     /**
     * Expected set of routes to be parsed
     * */
@@ -151,9 +146,6 @@ public class ParseTimetableService {
 
     @Builder
     record RouteLine(String routeId, String directionId, List<Stop> stops) {
-        public void addStop(Stop stop) {
-            this.stops.add(stop);
-        }
     }
 
     private List<Stop> parseStops() {
