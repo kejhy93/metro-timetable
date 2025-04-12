@@ -1,0 +1,107 @@
+package org.hejnaluk.metrotimetable.client;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
+import java.io.ByteArrayOutputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class PIDClient {
+
+    private String pathTOFile;
+
+    private WebClient webClient;
+
+    @Autowired
+    public PIDClient(WebClient.Builder webClientBuilder,
+                     @Value("${pid.client.path:''}")
+                     String pathTOFile) {
+        this.pathTOFile = pathTOFile;
+        log.info("Init PIDClient address is: {}", pathTOFile);
+        this.webClient = webClientBuilder
+                .baseUrl(pathTOFile)
+                .codecs(config -> config
+                        .defaultCodecs()
+                        .maxInMemorySize(128 * 1024 * 1024)) // 128 MB
+                .build();
+    }
+
+    public void getData() {
+        log.info("PIDClient address is: {}", pathTOFile);
+
+        // REACTIVE
+        // Use WebClient to download the ZIP file as a byte array
+        webClient
+                .get()
+                .header(HttpHeaders.ACCEPT, "application/zip")
+                .retrieve()
+                .bodyToMono(byte[].class)
+                .checkpoint("After bodyToMono")
+                .doOnNext(bytes -> log.info("Received ZIP file of size: {}", bytes.length))
+                .flatMap(this::extractZipInMemory)
+                .checkpoint("After extractZipInMemory")
+                .doOnSuccess(v -> log.info("ZIP extraction completed"))
+                .then(Mono.just("ZIP file downloaded and extracted successfully in memory!"))
+                .onErrorResume(e -> {
+                    log.error("Failed to download or extract ZIP", e);
+                    return Mono.error(e);
+                })
+                .block();
+
+        log.info("All files are downloaded and extracted successfully in memory!");
+    }
+
+    // Method to extract the ZIP file in memory from a byte array
+    private Mono<Void> extractZipInMemory(byte[] zipData) {
+        return Mono.<Void>create(sink -> {
+            try (InputStream inputStream = new java.io.ByteArrayInputStream(zipData);
+                 ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
+                ZipEntry entry;
+                while ((entry = zipInputStream.getNextEntry()) != null) {
+                    log.info("Extracting: {}", entry.getName());
+                    // If the entry is a file, read the content
+                    if (!entry.isDirectory()) {
+                        try (ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream()) {
+                            byte[] buffer = new byte[1024];
+                            int length;
+                            while ((length = zipInputStream.read(buffer)) > 0) {
+                                fileOutputStream.write(buffer, 0, length);
+                            }
+
+                            // File content is now in memory
+                            byte[] fileContent = fileOutputStream.toByteArray();
+                            log.info("File size: {} bytes", fileContent.length);
+
+                            log.info("File name is {}", entry.getName());
+                            try (FileOutputStream finalFileOutputStream = new FileOutputStream(entry.getName())) {
+                                finalFileOutputStream.write(fileContent);
+                                log.info("File created successfully.");
+                            }
+                        }
+                        // You can process the file content here (e.g., store, analyze, etc.)
+                    }
+                    zipInputStream.closeEntry();
+                    sink.success();
+                }
+            } catch (IOException e) {
+                log.error("Failed to download data.", e);
+                sink.error( e);
+            }
+
+        }).subscribeOn(Schedulers.boundedElastic());
+    }
+}
