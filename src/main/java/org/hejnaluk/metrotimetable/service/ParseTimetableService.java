@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -77,6 +78,8 @@ public class ParseTimetableService {
     public static final int ROUTE_STOP_STOP_SEQUENCE = 3;
 
     public static final String DELIMITER = ",";
+    public static final String FIRST_DIRECTION = "0";
+    public static final String SECOND_DIRECTION = "1";
 
 
     public void parseTimetableFiles() {
@@ -92,11 +95,11 @@ public class ParseTimetableService {
     }
 
     private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList) {
+        final var routeLinesList = new ArrayList<RouteLine>();
         for ( final var routeId : routeIds) {
             log.info("Calculate route line for routeId: {}", routeId);
-            final var stopsListFirstDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, "0");
-            final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, "1");
-
+            final var stopsListFirstDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, FIRST_DIRECTION);
+            final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, SECOND_DIRECTION);
 
             log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
                     .map(Stop::toString)
@@ -105,8 +108,20 @@ public class ParseTimetableService {
                     .map(Stop::toString)
                     .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
 
+            final var firstRouteLine = RouteLine.builder()
+                    .routeId(routeId)
+                    .directionId(FIRST_DIRECTION)
+                    .stops(stopsListFirstDirection)
+                    .build();
+            final var secondRouteLine = RouteLine.builder()
+                    .routeId(routeId)
+                    .directionId(SECOND_DIRECTION)
+                    .stops(stopsListSecondDirection)
+                    .build();
+            routeLinesList.add(firstRouteLine);
+            routeLinesList.add(secondRouteLine);
         }
-        return List.of();
+        return routeLinesList;
     }
 
     /**
