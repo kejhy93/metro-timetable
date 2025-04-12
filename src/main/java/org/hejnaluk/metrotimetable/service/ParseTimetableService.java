@@ -125,43 +125,6 @@ public class ParseTimetableService {
         final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList);
     }
 
-    private List<Trip> parseTrip() {
-        try {
-            return Files.readString(Path.of(TRIP_FILE_NAME))
-                    .lines()
-                    .map(line -> line.split(DELIMITER))
-                    .map(line -> Trip.builder()
-                            .routeId(line[TRIP_ROUTE_ID])
-                            .tripId(line[TRIP_TRIP_ID])
-                            .tripHeadsign(line[TRIP_TRIP_HEADSIGN])
-                            .tripShortName(line[TRIP_TRIP_SHORT_NAME])
-                            .directionId(line[TRIP_DIRECTION_ID])
-                            .build())
-                    .toList();
-        } catch (IOException e) {
-            log.error(ERROR_READING_FILE_ERROR_MESSAGE, TRIP_FILE_NAME, e);
-            return List.of();
-        }
-    }
-
-    private List<StopTime> parseStopTime() {
-        try {
-            return Files.readString(Path.of(STOP_TIME_FILE_NAME))
-                    .lines()
-                    .map(line -> line.split(DELIMITER))
-                    .map(line -> StopTime.builder()
-                            .tripId(line[STOP_TIME_TRIP_ID])
-                            .arrivalTime(line[STOP_TIME_ARRIVAL_TIME])
-                            .departureTime(line[STOP_TIME_DEPARTURE_TIME])
-                            .stopId(line[STOP_TIME_TRIP_ID])
-                            .build())
-                    .toList();
-        } catch (IOException e) {
-            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
-            return List.of();
-        }
-    }
-
     private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList) {
         final var routeLinesList = new ArrayList<RouteLine>();
         for (final var routeId : routeIds) {
@@ -193,6 +156,71 @@ public class ParseTimetableService {
     }
 
     /**
+     * Parses the `trips.txt` file and returns a list of Trip objects.
+     * <p>
+     * The file is expected to have the following format:
+     * route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed,exceptional,sub_agency_id
+     * <p>
+     * Each line is split using the specified delimiter, and the resulting data is mapped
+     * to a Trip object using the builder pattern.
+     * <p>
+     * If an error occurs while reading the file, an empty list is returned, and an error
+     * message is logged.
+     *
+     * @return A list of Trip objects parsed from the `trips.txt` file.
+     */
+    private List<Trip> parseTrip() {
+        try {
+            return Files.readString(Path.of(TRIP_FILE_NAME))
+                    .lines()
+                    .map(line -> line.split(DELIMITER))
+                    .map(line -> Trip.builder()
+                            .routeId(line[TRIP_ROUTE_ID])
+                            .tripId(line[TRIP_TRIP_ID])
+                            .tripHeadsign(line[TRIP_TRIP_HEADSIGN])
+                            .tripShortName(line[TRIP_TRIP_SHORT_NAME])
+                            .directionId(line[TRIP_DIRECTION_ID])
+                            .build())
+                    .toList();
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, TRIP_FILE_NAME, e);
+            return List.of();
+        }
+    }
+
+    /**
+     * Parses the `stop_times.txt` file and returns a list of StopTime objects.
+     * <p>
+     * The file is expected to have the following format:
+     * trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,shape_dist_traveled,trip_operation_type,bikes_allowed
+     * <p>
+     * Each line is split using the specified delimiter, and the resulting data is mapped
+     * to a StopTime object using the builder pattern.
+     * <p>
+     * If an error occurs while reading the file, an empty list is returned, and an error
+     * message is logged.
+     *
+     * @return A list of StopTime objects parsed from the `stop_times.txt` file.
+     */
+    private List<StopTime> parseStopTime() {
+        try {
+            return Files.readString(Path.of(STOP_TIME_FILE_NAME))
+                    .lines()
+                    .map(line -> line.split(DELIMITER))
+                    .map(line -> StopTime.builder()
+                            .tripId(line[STOP_TIME_TRIP_ID])
+                            .arrivalTime(line[STOP_TIME_ARRIVAL_TIME])
+                            .departureTime(line[STOP_TIME_DEPARTURE_TIME])
+                            .stopId(line[STOP_TIME_TRIP_ID])
+                            .build())
+                    .toList();
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
+            return List.of();
+        }
+    }
+
+    /**
      * Calculates the list of stops for a given route and direction.
      *
      * @param routeId        The ID of the route for which stops are to be calculated.
@@ -217,12 +245,25 @@ public class ParseTimetableService {
                 .toList();
     }
 
+    /**
+     * Parses the `stops.txt` file and returns a list of Stop objects.
+     * <p>
+     * The file is expected to have the following format:
+     * stop_id,stop_name,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,wheelchair_boarding,level_id,platform_code,asw_node_id,asw_stop_id,zone_region_type
+     * <p>
+     * Each line is split using the specified delimiter, and the resulting data is mapped
+     * to a Stop object using the builder pattern.
+     * <p>
+     * If an error occurs while reading the file, an empty list is returned, and an error
+     * message is logged.
+     *
+     * @return A list of Stop objects parsed from the `stops.txt` file.
+     */
     private List<Stop> parseStops() {
         try {
             return Files.readString(Path.of(STOPS_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
-//                    .filter(line -> ROUTE_IDS.contains(line[ROUTE_ROUTE_ID]))
                     .map(line -> Stop.builder()
                             .stopId(line[STOPS_STOP_ID])
                             .stopName(line[STOPS_STOP_NAME])
@@ -234,12 +275,25 @@ public class ParseTimetableService {
         }
     }
 
+    /**
+     * Parses the `route_stops.txt` file and returns a list of RouteStop objects.
+     * <p>
+     * The file is expected to have the following format:
+     * route_id,direction_id,stop_id,stop_sequence
+     * <p>
+     * Each line is split using the specified delimiter, and the resulting data is mapped
+     * to a RouteStop object using the builder pattern.
+     * <p>
+     * If an error occurs while reading the file, an empty list is returned, and an error
+     * message is logged.
+     *
+     * @return A list of RouteStop objects parsed from the `route_stops.txt` file.
+     */
     private List<RouteStop> parseRouteStops() {
         try {
             return Files.readString(Path.of(ROUTE_STOPS_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
-//                    .filter(line -> ROUTE_IDS.contains(line[ROUTE_ROUTE_ID]))
                     .map(line -> RouteStop.builder()
                             .routeId(line[ROUTE_STOP_ROUTE_ID])
                             .directionId(line[ROUTE_STOP_DIRECTION_ID])
@@ -253,6 +307,17 @@ public class ParseTimetableService {
         }
     }
 
+    /**
+     * Parses the routes file and returns a list of Route objects.
+     * <p>
+     * The file is expected to have the following format:
+     * route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
+     * <p>
+     * Only routes with IDs present in the ROUTE_IDS set are included in the result.
+     *
+     * @return A list of Route objects parsed from the routes file.
+     * Returns an empty list if an error occurs while reading the file.
+     */
     private List<Route> parseRoutes() {
         try {
             return Files.readString(Path.of(ROUTES_FILE_NAME))
