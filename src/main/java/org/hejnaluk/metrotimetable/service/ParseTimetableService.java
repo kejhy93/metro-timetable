@@ -72,21 +72,102 @@ public class ParseTimetableService {
     public static final int ROUTE_STOP_STOP_ID = 2;
     public static final int ROUTE_STOP_STOP_SEQUENCE = 3;
 
+    /**
+     * Get path to the file containing stop times information
+     * <p>
+     * format:
+     * trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,shape_dist_traveled,trip_operation_type,bikes_allowed
+     * <p>
+     * trip_id,arrival_time,departure_time,stop_id
+     */
+    public static final String STOP_TIME_FILE_NAME = "stop_times.txt";
+    /**
+     * Columns key for stop_times.txt
+     */
+    public static final int STOP_TIME_TRIP_ID = 0;
+    public static final int STOP_TIME_ARRIVAL_TIME = 1;
+    public static final int STOP_TIME_DEPARTURE_TIME = 2;
+
+    /**
+     * Get path to the file containing trips information
+     *
+     * format:
+     * route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed,exceptional,sub_agency_id
+     *
+     * route_id,trip_id,trip_headsign,trip_short_name,direction_id
+     */
+    public static final String TRIP_FILE_NAME = "trips.txt";
+    /**
+     * Columns key for trips.txt
+     */
+    public static final int TRIP_ROUTE_ID = 0;
+    public static final int TRIP_TRIP_ID = 2;
+    public static final int TRIP_TRIP_HEADSIGN = 3;
+    public static final int TRIP_TRIP_SHORT_NAME = 4;
+    public static final int TRIP_DIRECTION_ID = 5;
+
     public static final String DELIMITER = ",";
     public static final String FIRST_DIRECTION = "0";
     public static final String SECOND_DIRECTION = "1";
-
+    public static final String ERROR_READING_FILE_ERROR_MESSAGE = "Error reading file: {}";
 
     public void parseTimetableFiles() {
         final var routesList = parseRoutes();
         final var routeStopsList = parseRouteStops();
         final var stopsList = parseStops();
+        final var stopTimesList = parseStopTime();
+        final var tripList = parseTrip();
 
         log.info("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
         log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
         log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
         final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList);
+    }
+
+    private List<Trip> parseTrip() {
+        try {
+            return Files.readString(Path.of(TRIP_FILE_NAME))
+                    .lines()
+                    .map(line -> line.split(DELIMITER))
+                    .map(line -> Trip.builder()
+                            .routeId(line[TRIP_ROUTE_ID])
+                            .tripId(line[TRIP_TRIP_ID])
+                            .tripHeadsign(line[TRIP_TRIP_HEADSIGN])
+                            .tripShortName(line[TRIP_TRIP_SHORT_NAME])
+                            .directionId(line[TRIP_DIRECTION_ID])
+                            .build())
+                    .toList();
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, TRIP_FILE_NAME, e);
+            return List.of();
+        }
+    }
+
+    @Builder
+    record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
+    }
+
+    private List<StopTime> parseStopTime() {
+        try {
+            return Files.readString(Path.of(STOP_TIME_FILE_NAME))
+                    .lines()
+                    .map(line -> line.split(DELIMITER))
+                    .map(line -> StopTime.builder()
+                            .tripId(line[STOP_TIME_TRIP_ID])
+                            .arrivalTime(line[STOP_TIME_ARRIVAL_TIME])
+                            .departureTime(line[STOP_TIME_DEPARTURE_TIME])
+                            .stopId(line[STOP_TIME_TRIP_ID])
+                            .build())
+                    .toList();
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
+            return List.of();
+        }
+    }
+
+    @Builder
+    record StopTime(String tripId, String arrivalTime, String departureTime, String stopId) {
     }
 
     private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList) {
@@ -179,7 +260,7 @@ public class ParseTimetableService {
                             .build())
                     .toList();
         } catch (IOException e) {
-            log.error("Error reading file: {}", ROUTE_STOPS_FILE_NAME, e);
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTE_STOPS_FILE_NAME, e);
             return List.of();
         }
     }
