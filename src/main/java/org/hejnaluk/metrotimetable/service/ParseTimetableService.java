@@ -87,6 +87,7 @@ public class ParseTimetableService {
     public static final int STOP_TIME_TRIP_ID = 0;
     public static final int STOP_TIME_ARRIVAL_TIME = 1;
     public static final int STOP_TIME_DEPARTURE_TIME = 2;
+    public static final int STOP_TIME_STOP_ID = 3;
 
     /**
      * Get path to the file containing trips information
@@ -211,7 +212,7 @@ public class ParseTimetableService {
                             .tripId(line[STOP_TIME_TRIP_ID])
                             .arrivalTime(line[STOP_TIME_ARRIVAL_TIME])
                             .departureTime(line[STOP_TIME_DEPARTURE_TIME])
-                            .stopId(line[STOP_TIME_TRIP_ID])
+                            .stopId(line[STOP_TIME_STOP_ID])
                             .build())
                     .toList();
         } catch (IOException e) {
@@ -341,6 +342,7 @@ public class ParseTimetableService {
 
     @Builder
     record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
+
     }
 
     @Builder
