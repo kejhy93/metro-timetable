@@ -14,6 +14,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -22,6 +30,7 @@ import java.util.zip.ZipInputStream;
 @Slf4j
 public class PIDClient {
 
+    public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
     private String pathTOFile;
 
     private WebClient webClient;
@@ -42,6 +51,10 @@ public class PIDClient {
 
     public void getData() {
         log.info("PIDClient address is: {}", pathTOFile);
+        if ( !isDoClientCall() ) {
+            log.info("Client call is not needed");
+            return;
+        }
 
         // REACTIVE
         // Use WebClient to download the ZIP file as a byte array
@@ -62,7 +75,73 @@ public class PIDClient {
                 })
                 .block();
 
+        writeSuccessful();
+
         log.info("All files are downloaded and extracted successfully in memory!");
+    }
+
+    /**
+     * Writes a synchronization file with the current timestamp.
+     * The file is named as specified by the `SYNCHRONIZED_FILE_NAME` constant.
+     * If the file cannot be written, an error is logged, and a `RuntimeException` is thrown.
+     */
+    private void writeSuccessful() {
+        final var now = Instant.now();
+        try {
+            Files.writeString(Path.of(SYNCHRONIZED_FILE_NAME), ZonedDateTime.ofInstant(now, ZoneOffset.UTC).toString());
+        } catch (IOException e) {
+            log.error("Failed to write synchronized file.", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Determines whether a client call should be made based on the existence and content
+     * of a synchronization file. If the file exists, it checks whether the last synchronization
+     * date is older than 7 days. If the file does not exist, a client call is required.
+     *
+     * @return `true` if a client call is needed, `false` otherwise
+     * @throws RuntimeException if an I/O error occurs while reading the synchronization file
+     */
+    private boolean isDoClientCall() {
+        boolean doClientCall;
+        try {
+            final var syncPath = Path.of(SYNCHRONIZED_FILE_NAME);
+            final var exists = Files.exists(syncPath);
+            if (exists) {
+                log.info("File exists");
+                final var syncString = Files.readString(syncPath);
+
+                final var parsedDateTime = getParsedDateTime(syncString);
+
+                final var now = Instant.now();
+                ZonedDateTime nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(7);
+
+                doClientCall = nowZonedDateTime.isAfter(parsedDateTime.orElse(ZonedDateTime.now()));
+            } else {
+                log.info("File does not exist");
+                doClientCall = true;
+            }
+        } catch (IOException e) {
+            log.error("Failed to read synchronized file.", e);
+            throw new RuntimeException(e);
+        }
+        return doClientCall;
+    }
+
+    /**
+     * Parses a string into a `ZonedDateTime` object.
+     *
+     * @param stringToParse the string to parse into a `ZonedDateTime`
+     * @return an `Optional` containing the parsed `ZonedDateTime` if successful,
+     * or an empty `Optional` if parsing fails
+     */
+    private Optional<ZonedDateTime> getParsedDateTime(String stringToParse) {
+        try {
+            return Optional.of(ZonedDateTime.parse(stringToParse));
+        } catch (DateTimeParseException e) {
+            return Optional.empty();
+        }
     }
 
     // Method to extract the ZIP file in memory from a byte array

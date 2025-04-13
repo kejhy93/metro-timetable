@@ -4,6 +4,7 @@ package org.hejnaluk.metrotimetable.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.client.PIDClient;
+import org.hejnaluk.metrotimetable.service.ParseTimetableService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,11 +17,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class PIDController {
 
     private final PIDClient pidClient;
+    private final ParseTimetableService parseTimetableService;
 
     @GetMapping
     public ResponseEntity<Void> get() {
         log.info("Hello");
         pidClient.getData();
+
+        parseTimetableService.parseTimetableFiles();
+
         return ResponseEntity.ok().build();
     }
 
