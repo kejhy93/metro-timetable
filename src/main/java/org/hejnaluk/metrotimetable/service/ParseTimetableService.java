@@ -123,15 +123,37 @@ public class ParseTimetableService {
         log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
         log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
-        final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList);
+        final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList, tripList, stopTimesList);
     }
 
-    private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList) {
+    private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList, List<Trip> tripList, List<StopTime> stopTimeList) {
         final var routeLinesList = new ArrayList<RouteLine>();
         for (final var routeId : routeIds) {
             log.info("Calculate route line for routeId: {}", routeId);
             final var stopsListFirstDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, FIRST_DIRECTION);
             final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, SECOND_DIRECTION);
+
+            for ( final var trip : tripList) {
+                if (routeId.equals(trip.routeId) && FIRST_DIRECTION.equals(trip.directionId)) {
+                    final var stopTimes = stopTimeList.stream()
+                            .filter(stopTime -> trip.tripId.equals(stopTime.tripId))
+                            .map(stopTime -> {
+                                final var stopId = stopTime.stopId;
+                                final var stop = stopsList.stream()
+                                        .filter(s -> stopId.equals(s.stopId))
+                                        .findAny()
+                                        .orElseThrow(() -> new IllegalArgumentException("Stop not found: " + stopId));
+                                return RouteLineStop.builder()
+                                        .stop(stop)
+                                        .stopTime(stopTime)
+                                        .build();
+                            })
+                            .toList();
+                    log.info("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
+                            .map(RouteLineStop::toString)
+                            .collect(Collectors.joining(",\n\t", "\n[\n\t", "\n]")));
+                }
+            }
 
             log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
                     .map(Stop::toString)
@@ -154,6 +176,31 @@ public class ParseTimetableService {
             routeLinesList.add(secondRouteLine);
         }
         return routeLinesList;
+    }
+
+    /**
+     * Calculates the list of stops for a given route and direction.
+     *
+     * @param routeId        The ID of the route for which stops are to be calculated.
+     * @param routeStopsList The list of all route stops.
+     * @param stopsList      The list of all stops.
+     * @param direction      The direction ID (e.g., "0" or "1") for which stops are to be calculated.
+     * @return A list of stops corresponding to the given route and direction.
+     */
+    private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, List<Stop> stopsList, String direction) {
+        return routeStopsList.stream()
+                // filter only route stops for the given route
+                .filter(routeStop -> routeId.equals(routeStop.routeId))
+                // filter only route stops for the given direction
+                .filter(routeStop -> direction.equals(routeStop.directionId))
+                // find corresponding stop in the stops list
+                .map(routeStop -> {
+                    final var stopId = routeStop.stopId;
+                    return stopsList.stream().filter(stop -> stopId.equals(stop.stopId)).findAny();
+                })
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .toList();
     }
 
     /**
@@ -219,31 +266,6 @@ public class ParseTimetableService {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
             return List.of();
         }
-    }
-
-    /**
-     * Calculates the list of stops for a given route and direction.
-     *
-     * @param routeId        The ID of the route for which stops are to be calculated.
-     * @param routeStopsList The list of all route stops.
-     * @param stopsList      The list of all stops.
-     * @param direction      The direction ID (e.g., "0" or "1") for which stops are to be calculated.
-     * @return A list of stops corresponding to the given route and direction.
-     */
-    private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, List<Stop> stopsList, String direction) {
-        return routeStopsList.stream()
-                // filter only route stops for the given route
-                .filter(routeStop -> routeId.equals(routeStop.routeId))
-                // filter only route stops for the given direction
-                .filter(routeStop -> direction.equals(routeStop.directionId))
-                // find corresponding stop in the stops list
-                .map(routeStop -> {
-                    final var stopId = routeStop.stopId;
-                    return stopsList.stream().filter(stop -> stopId.equals(stop.stopId)).findAny();
-                })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .toList();
     }
 
     /**
@@ -340,6 +362,29 @@ public class ParseTimetableService {
         }
     }
 
+    /**
+     * Represents a route line, which includes information about a route, its direction,
+     * the list of stops, and the associated stop times.
+     *
+     * @param routeId     The ID of the route.
+     * @param directionId The direction ID (e.g., "0" or "1").
+     * @param stops       The list of stops for the route.
+     * @param stopTimes   The list of stop times for the route.
+     */
+    @Builder
+    record RouteLine(String routeId, String directionId, List<Stop> stops, List<StopTime> stopTimes) {
+    }
+
+    /**
+     * Represents a combination of a stop and its associated stop time.
+     *
+     * @param stop     The stop information.
+     * @param stopTime The stop time information for the stop.
+     */
+    @Builder
+    record RouteLineStop(Stop stop, StopTime stopTime) {
+    }
+
     @Builder
     record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
 
@@ -347,10 +392,7 @@ public class ParseTimetableService {
 
     @Builder
     record StopTime(String tripId, String arrivalTime, String departureTime, String stopId) {
-    }
 
-    @Builder
-    record RouteLine(String routeId, String directionId, List<Stop> stops) {
     }
 
     @Builder
