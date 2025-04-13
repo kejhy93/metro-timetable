@@ -58,7 +58,8 @@ public class ParseTimetableService {
     /**
      * Expected set of routes to be parsed
      */
-    public static final Set<String> ROUTE_IDS = Set.of("L991", "L992", "L993");
+//    public static final Set<String> ROUTE_IDS = Set.of("L991", "L992", "L993");
+    public static final Set<String> ROUTE_IDS = Set.of("L991");
 
     /**
      * route_id,direction_id,stop_id,stop_sequence
