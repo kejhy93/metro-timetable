@@ -112,6 +112,7 @@ public class ParseTimetableService {
     public static final String FIRST_DIRECTION = "0";
     public static final String SECOND_DIRECTION = "1";
     public static final String ERROR_READING_FILE_ERROR_MESSAGE = "Error reading file: {}";
+    public static final String NEW_LINE_AND_TAB = "\n\t";
 
     public void parseTimetableFiles() {
         final var routesList = parseRoutes();
@@ -153,28 +154,17 @@ public class ParseTimetableService {
                     log.info("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
                             .map(RouteLineStop::toString)
                             .collect(Collectors.joining(",\n\t", "\n[\n\t", "\n]")));
+                    final var firstRouteLine = RouteLine.builder()
+                            .routeId(routeId)
+                            .directionId(FIRST_DIRECTION)
+                            .routeLineStops(stopTimes)
+                            .build();
+                    log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
+                            .map(Stop::toString)
+                            .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
+                    routeLinesList.add(firstRouteLine);
                 }
             }
-
-            log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
-                    .map(Stop::toString)
-                    .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
-            log.info("Route stops for second direction: {}", stopsListSecondDirection.stream()
-                    .map(Stop::toString)
-                    .collect(Collectors.joining("\n\t", "\n[\n\t", "\n]")));
-
-            final var firstRouteLine = RouteLine.builder()
-                    .routeId(routeId)
-                    .directionId(FIRST_DIRECTION)
-                    .stops(stopsListFirstDirection)
-                    .build();
-            final var secondRouteLine = RouteLine.builder()
-                    .routeId(routeId)
-                    .directionId(SECOND_DIRECTION)
-                    .stops(stopsListSecondDirection)
-                    .build();
-            routeLinesList.add(firstRouteLine);
-            routeLinesList.add(secondRouteLine);
         }
         return routeLinesList;
     }
@@ -367,13 +357,12 @@ public class ParseTimetableService {
      * Represents a route line, which includes information about a route, its direction,
      * the list of stops, and the associated stop times.
      *
-     * @param routeId     The ID of the route.
-     * @param directionId The direction ID (e.g., "0" or "1").
-     * @param stops       The list of stops for the route.
-     * @param stopTimes   The list of stop times for the route.
+     * @param routeId        The ID of the route.
+     * @param directionId    The direction ID (e.g., "0" or "1").
+     * @param routeLineStops The list of stops and stops time for the route.
      */
     @Builder
-    record RouteLine(String routeId, String directionId, List<Stop> stops, List<StopTime> stopTimes) {
+    record RouteLine(String routeId, String directionId, List<RouteLineStop> routeLineStops) {
     }
 
     /**
