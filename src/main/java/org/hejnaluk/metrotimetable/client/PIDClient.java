@@ -19,7 +19,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
@@ -31,6 +30,11 @@ import java.util.zip.ZipInputStream;
 public class PIDClient {
 
     public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
+    public static final int MAX_WEBCLIENT_MEMORY_IN_MB = 128;
+
+    @Value("${pid.client.days.offset:7}")
+    private int daysOffset;
+
     private String pathTOFile;
 
     private WebClient webClient;
@@ -45,7 +49,7 @@ public class PIDClient {
                 .baseUrl(pathTOFile)
                 .codecs(config -> config
                         .defaultCodecs()
-                        .maxInMemorySize(128 * 1024 * 1024)) // 128 MB
+                        .maxInMemorySize(MAX_WEBCLIENT_MEMORY_IN_MB * 1024 * 1024)) // 128 MB
                 .build();
     }
 
@@ -115,7 +119,7 @@ public class PIDClient {
                 final var parsedDateTime = getParsedDateTime(syncString);
 
                 final var now = Instant.now();
-                ZonedDateTime nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(7);
+                ZonedDateTime nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(daysOffset);
 
                 doClientCall = nowZonedDateTime.isAfter(parsedDateTime.orElse(ZonedDateTime.now()));
             } else {
