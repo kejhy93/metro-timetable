@@ -119,7 +119,7 @@ public class ParseTimetableService {
         final var routeStopsList = parseRouteStops();
         final var stopsList = parseStops();
         final var stopTimesList = parseStopTime();
-        final var tripList = parseTrip();
+        final var tripList = parseTrip(ROUTE_IDS);
 
         log.info("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
         log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
@@ -200,19 +200,22 @@ public class ParseTimetableService {
      * The file is expected to have the following format:
      * route_id,service_id,trip_id,trip_headsign,trip_short_name,direction_id,block_id,shape_id,wheelchair_accessible,bikes_allowed,exceptional,sub_agency_id
      * <p>
+     * Only trips with route IDs present in the provided `routeIds` set are included in the result.
      * Each line is split using the specified delimiter, and the resulting data is mapped
      * to a Trip object using the builder pattern.
      * <p>
      * If an error occurs while reading the file, an empty list is returned, and an error
      * message is logged.
      *
+     * @param routeIds A set of route IDs to filter the trips.
      * @return A list of Trip objects parsed from the `trips.txt` file.
      */
-    private List<Trip> parseTrip() {
+    private List<Trip> parseTrip(Set<String> routeIds) {
         try {
             return Files.readString(Path.of(TRIP_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
+                    .filter(line -> routeIds.contains(line[TRIP_ROUTE_ID]))
                     .map(line -> Trip.builder()
                             .routeId(line[TRIP_ROUTE_ID])
                             .tripId(line[TRIP_TRIP_ID])
