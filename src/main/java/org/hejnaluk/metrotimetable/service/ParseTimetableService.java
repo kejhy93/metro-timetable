@@ -3,6 +3,7 @@ package org.hejnaluk.metrotimetable.service;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -58,9 +59,8 @@ public class ParseTimetableService {
     /**
      * Expected set of routes to be parsed
      */
-//    @Value("${pid.client.routes.ids:}")
-//    public static final Set<String> ROUTE_IDS = Set.of("L991", "L992", "L993");
-    public static final Set<String> ROUTE_IDS = Set.of("L991");
+    @Value("${pid.client.routes.ids:}")
+    public final Set<String> routeIds;
 
     /**
      * route_id,direction_id,stop_id,stop_sequence
@@ -123,7 +123,7 @@ public class ParseTimetableService {
         final var routeStopsList = parseRouteStops();
         final var stopsList = parseStops();
         final var stopTimesList = parseStopTime();
-        final var tripList = parseTrip(ROUTE_IDS);
+        final var tripList = parseTrip(routeIds);
 
         log.debug("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
         log.debug("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
@@ -133,15 +133,14 @@ public class ParseTimetableService {
         log.info("----------------------- PARSING DONE ------------------------");
 
         log.info("------------------------ CACHE START ------------------------");
-        final var routeIdDirectionCache = new HashMap<String, TreeMap<LocalTime, List<CompleteStop>>>();
         for (final var routeLine : routesLines) {
-//            log.info("Route line: {}", routeLine.toString());
+            log.debug("Route line: {}", routeLine.toString());
             final var key = routeLine.routeId + "-" + routeLine.directionId;
             final var routeLineStops = routeLine.routeLineStops;
             var firstArrivalTime = routeLine.routeLineStops.getFirst().stopTime.arrivalTime;
             var listOfCompleteStop = new ArrayList<CompleteStop>();
             for (final var route : routeLineStops) {
-//                log.info("Process route line for routeId: {}, directionId: {}, arrivalTime: {}", routeLine.routeId, routeLine.directionId, route.stopTime.arrivalTime);
+                log.debug("Process route line for routeId: {}, directionId: {}, arrivalTime: {}", routeLine.routeId, routeLine.directionId, route.stopTime.arrivalTime);
                 listOfCompleteStop.add(CompleteStop.builder()
                         .stopName(route.stop().stopName())
                         .stopId(route.stop.stopId)
@@ -164,14 +163,27 @@ public class ParseTimetableService {
             final var value = entry.getValue();
             log.debug("Start Key: {} value: {}", key, value);
             for (final var entry2 : value.entrySet()) {
-                final var key2 = entry2.getKey();
-                final var value2 = entry2.getValue();
-//                log.info("Key: {} value: {}", key2, value2.stream().map(CompleteStop::toString).collect(Collectors.joining(",", "[", "]")));
-                log.info("Key: {}", DateTimeFormatter.ofPattern("HH:mm:ss").format(key2));
+                final var arrivalTime = entry2.getKey();
+                final var listOfCompleteStop = entry2.getValue();
+                log.debug("Key: {} value: {}", arrivalTime, listOfCompleteStop.stream().map(CompleteStop::toString).collect(Collectors.joining(",", "[", "]")));
+                log.info("Key: {}", getFormattedTime(arrivalTime));
             }
             log.debug("End Key: {} value: {}", key, value);
         }
         log.info("------------------------ VERIFY DONE ------------------------");
+    }
+
+    /**
+     * Formats a given `LocalTime` object into a string representation.
+     * <p>
+     * The time is formatted using the pattern `HH:mm:ss`, which represents
+     * hours, minutes, and seconds in a 24-hour format.
+     *
+     * @param localTime The `LocalTime` object to format.
+     * @return A string representation of the time in `HH:mm:ss` format.
+     */
+    private static String getFormattedTime(LocalTime localTime) {
+        return DateTimeFormatter.ofPattern("HH:mm:ss").format(localTime);
     }
 
     /**
@@ -196,7 +208,7 @@ public class ParseTimetableService {
             log.debug("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
             final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, directionId);
             if (routeId.equals(trip.routeId)) {
-                final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip, routeId, directionId);
+                final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip);
                 final var routeLine = RouteLine.builder()
                         .routeId(routeId)
                         .directionId(directionId)
@@ -221,11 +233,9 @@ public class ParseTimetableService {
      * @param stopsList    The list of all stops.
      * @param stopTimeList The list of all stop times.
      * @param trip         The trip object containing route and direction information.
-     * @param routeId      The ID of the route.
-     * @param directionId  The direction ID (e.g., "0" or "1").
      * @return A list of RouteLineStop objects for the given route and direction.
      */
-    private List<RouteLineStop> calculateRouteLineStop(List<Stop> stopsList, List<StopTime> stopTimeList, Trip trip, String routeId, String directionId) {
+    private List<RouteLineStop> calculateRouteLineStop(List<Stop> stopsList, List<StopTime> stopTimeList, Trip trip) {
         final var stopTimes = stopTimeList.stream()
                 .filter(stopTime -> trip.tripId.equals(stopTime.tripId))
                 .map(stopTime -> {
@@ -462,7 +472,7 @@ public class ParseTimetableService {
             return Files.readString(Path.of(ROUTES_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
-                    .filter(line -> ROUTE_IDS.contains(line[ROUTE_ROUTE_ID]))
+                    .filter(line -> routeIds.contains(line[ROUTE_ROUTE_ID]))
                     .map(line -> Route.builder()
                             .routeId(line[ROUTE_ROUTE_ID])
                             .routeShortName(line[ROUTE_ROUTE_SHORT_NAME])
@@ -527,8 +537,8 @@ public class ParseTimetableService {
             return "CompleteStop{" +
                     "stopId='" + stopId + '\'' +
                     ", stopName='" + stopName + '\'' +
-                    ", arrivalTime=" + DateTimeFormatter.ofPattern("HH:mm:ss").format(arrivalTime) +
-                    ", departureTime=" + DateTimeFormatter.ofPattern("HH:mm:ss").format(departureTime) +
+                    ", arrivalTime=" + getFormattedTime(arrivalTime) +
+                    ", departureTime=" + getFormattedTime(departureTime) +
                     '}';
         }
     }
