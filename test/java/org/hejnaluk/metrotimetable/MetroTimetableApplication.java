@@ -8,6 +8,7 @@ class MetroTimetableApplicationTests {
 
 	@Test
 	void contextLoads() {
+		// too lazy for unit test ... yet
 	}
 
 }

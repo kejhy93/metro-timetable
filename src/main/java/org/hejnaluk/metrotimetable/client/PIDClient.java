@@ -2,6 +2,7 @@ package org.hejnaluk.metrotimetable.client;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -95,7 +96,7 @@ public class PIDClient {
             Files.writeString(Path.of(SYNCHRONIZED_FILE_NAME), ZonedDateTime.ofInstant(now, ZoneOffset.UTC).toString());
         } catch (IOException e) {
             log.error("Failed to write synchronized file.", e);
-            throw new RuntimeException(e);
+            throw new WriteSyncFileException(e);
         }
     }
 
@@ -128,7 +129,7 @@ public class PIDClient {
             }
         } catch (IOException e) {
             log.error("Failed to read synchronized file.", e);
-            throw new RuntimeException(e);
+            throw new WriteSyncFileException(e);
         }
         return doClientCall;
     }
