@@ -8,10 +8,10 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,6 +58,7 @@ public class ParseTimetableService {
     /**
      * Expected set of routes to be parsed
      */
+//    @Value("${pid.client.routes.ids:}")
 //    public static final Set<String> ROUTE_IDS = Set.of("L991", "L992", "L993");
     public static final Set<String> ROUTE_IDS = Set.of("L991");
 
@@ -109,10 +110,10 @@ public class ParseTimetableService {
     public static final int TRIP_DIRECTION_ID = 5;
 
     public static final String DELIMITER = ",";
-    public static final String FIRST_DIRECTION = "0";
-    public static final String SECOND_DIRECTION = "1";
     public static final String ERROR_READING_FILE_ERROR_MESSAGE = "Error reading file: {}";
     public static final String NEW_LINE_AND_TAB = "\n\t";
+
+    private static final Map<String, List<Stop>> cacheListStopByRouteIdAndDirectionId = new ConcurrentHashMap<>();
 
     public void parseTimetableFiles() {
         final var routesList = parseRoutes();
@@ -125,48 +126,78 @@ public class ParseTimetableService {
         log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
         log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
-        final var routesLines = calculateRouteLine(ROUTE_IDS, routeStopsList, stopsList, tripList, stopTimesList);
-    }
+        final var routesLines = calculateRouteLine(routeStopsList, stopsList, tripList, stopTimesList);
 
-    private List<RouteLine> calculateRouteLine(Set<String> routeIds, List<RouteStop> routeStopsList, List<Stop> stopsList, List<Trip> tripList, List<StopTime> stopTimeList) {
-        final var routeLinesList = new ArrayList<RouteLine>();
-        for (final var routeId : routeIds) {
-            log.info("Calculate route line for routeId: {}", routeId);
-            final var stopsListFirstDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, FIRST_DIRECTION);
-            final var stopsListSecondDirection = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, SECOND_DIRECTION);
+        log.info ( "----------------------- PARSING DONE ------------------------" );
 
-            for ( final var trip : tripList) {
-                if (routeId.equals(trip.routeId) && FIRST_DIRECTION.equals(trip.directionId)) {
-                    final var stopTimes = stopTimeList.stream()
-                            .filter(stopTime -> trip.tripId.equals(stopTime.tripId))
-                            .map(stopTime -> {
-                                final var stopId = stopTime.stopId;
-                                final var stop = stopsList.stream()
-                                        .filter(s -> stopId.equals(s.stopId))
-                                        .findAny()
-                                        .orElseThrow(() -> new IllegalArgumentException("Stop not found: " + stopId));
-                                return RouteLineStop.builder()
-                                        .stop(stop)
-                                        .stopTime(stopTime)
-                                        .build();
-                            })
-                            .toList();
-                    log.info("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
-                            .map(RouteLineStop::toString)
-                            .collect(Collectors.joining(",\n\t", "\n[\n\t", "\n]")));
-                    final var firstRouteLine = RouteLine.builder()
-                            .routeId(routeId)
-                            .directionId(FIRST_DIRECTION)
-                            .routeLineStops(stopTimes)
-                            .build();
-                    log.info("Route stops for first direction: {}", stopsListFirstDirection.stream()
-                            .map(Stop::toString)
-                            .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
-                    routeLinesList.add(firstRouteLine);
-                }
+        for ( final var routeLine : routesLines ) {
+//            log.info("Route line: {}", routeLine.toString());
+            final var key = routeLine.routeId + "-" + routeLine.directionId;
+            final var routeLineStops = routeLine.routeLineStops;
+            for ( final var route : routeLineStops) {
+                log.info("Process route line for routeId: {}, directionId: {}, arrivalTime: {}", routeLine.routeId, routeLine.directionId, route.stopTime.arrivalTime);
             }
         }
+    }
+
+    private List<RouteLine> calculateRouteLine(List<RouteStop> routeStopsList, List<Stop> stopsList, List<Trip> tripList, List<StopTime> stopTimeList) {
+        final var routeLinesList = new ArrayList<RouteLine>();
+
+        for (final var trip : tripList) {
+            final var routeId = trip.routeId();
+            final var directionId = trip.directionId();
+            log.info("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
+            final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, directionId);
+            if (routeId.equals(trip.routeId)) {
+                final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip, routeId, directionId);
+                final var routeLine = RouteLine.builder()
+                        .routeId(routeId)
+                        .directionId(directionId)
+                        .routeLineStops(stopTimes)
+                        .build();
+                log.info("Route stops for direction: {}", stopList.stream()
+                        .map(Stop::toString)
+                        .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
+                routeLinesList.add(routeLine);
+            }
+        }
+
         return routeLinesList;
+    }
+
+    /**
+     * Calculates the list of RouteLineStop objects for a given route and direction.
+     * <p>
+     * This method checks if the result is already cached. If not, it processes the stop times
+     * and matches them with the corresponding stops to create RouteLineStop objects.
+     * The result is then cached for future use.
+     *
+     * @param stopsList    The list of all stops.
+     * @param stopTimeList The list of all stop times.
+     * @param trip         The trip object containing route and direction information.
+     * @param routeId      The ID of the route.
+     * @param directionId  The direction ID (e.g., "0" or "1").
+     * @return A list of RouteLineStop objects for the given route and direction.
+     */
+    private List<RouteLineStop> calculateRouteLineStop(List<Stop> stopsList, List<StopTime> stopTimeList, Trip trip, String routeId, String directionId) {
+        final var stopTimes = stopTimeList.stream()
+                .filter(stopTime -> trip.tripId.equals(stopTime.tripId))
+                .map(stopTime -> {
+                    final var stopId = stopTime.stopId;
+                    final var stop = stopsList.stream()
+                            .filter(s -> stopId.equals(s.stopId))
+                            .findAny()
+                            .orElseThrow(() -> new IllegalArgumentException("Stop not found: " + stopId));
+                    return RouteLineStop.builder()
+                            .stop(stop)
+                            .stopTime(stopTime)
+                            .build();
+                })
+                .toList();
+        log.info("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
+                .map(RouteLineStop::toString)
+                .collect(Collectors.joining(",\n\t", "\n[\n\t", "\n]")));
+        return stopTimes;
     }
 
     /**
@@ -179,7 +210,13 @@ public class ParseTimetableService {
      * @return A list of stops corresponding to the given route and direction.
      */
     private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, List<Stop> stopsList, String direction) {
-        return routeStopsList.stream()
+        final var key = routeId + "-" + direction;
+
+        if (cacheListStopByRouteIdAndDirectionId.containsKey(key)) {
+            log.debug("Found key: {} in cacheListStopByRouteIdAndDirectionId", key);
+            return cacheListStopByRouteIdAndDirectionId.get(key);
+        }
+        final var value = routeStopsList.stream()
                 // filter only route stops for the given route
                 .filter(routeStop -> routeId.equals(routeStop.routeId))
                 // filter only route stops for the given direction
@@ -192,6 +229,11 @@ public class ParseTimetableService {
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .toList();
+
+        log.info("New value for key: {} in cacheListStopByRouteIdAndDirectionId", key);
+        cacheListStopByRouteIdAndDirectionId.put(key, value);
+
+        return value;
     }
 
     /**
@@ -248,18 +290,48 @@ public class ParseTimetableService {
         try {
             return Files.readString(Path.of(STOP_TIME_FILE_NAME))
                     .lines()
+                    .skip(1)
                     .map(line -> line.split(DELIMITER))
-                    .map(line -> StopTime.builder()
-                            .tripId(line[STOP_TIME_TRIP_ID])
-                            .arrivalTime(line[STOP_TIME_ARRIVAL_TIME])
-                            .departureTime(line[STOP_TIME_DEPARTURE_TIME])
-                            .stopId(line[STOP_TIME_STOP_ID])
-                            .build())
+                    .map(line -> {
+                        final var arrivalTime = reformatHoursFormat(line, STOP_TIME_ARRIVAL_TIME);
+                        final var departureTime = reformatHoursFormat(line, STOP_TIME_DEPARTURE_TIME);
+                        return StopTime.builder()
+                                .tripId(line[STOP_TIME_TRIP_ID])
+                                .arrivalTime(LocalTime.parse(arrivalTime))
+                                .departureTime(LocalTime.parse(departureTime))
+                                .stopId(line[STOP_TIME_STOP_ID])
+                                .build();
+                    })
                     .toList();
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
             return List.of();
         }
+    }
+
+    /**
+     * Reformats a time string from the input array to ensure it adheres to a 24-hour format.
+     * <p>
+     * The method takes a time string in the format `HH:mm:ss` and ensures that:
+     * - Hours are modulo 24.
+     * - Minutes are modulo 60.
+     * - Seconds are modulo 60.
+     * <p>
+     * Example:
+     * Input: "25:61:61"
+     * Reformatted: "01:01:01"
+     *
+     * @param line  The array of strings containing the time data.
+     * @param index The index of the time string in the array.
+     * @return A reformatted time string in the format `HH:mm:ss`.
+     */
+    private String reformatHoursFormat(String[] line, int index) {
+        final var time = String.format("%02d:%02d:%02d",
+                Integer.parseInt(line[index].split(":")[0]) % 24,
+                Integer.parseInt(line[index].split(":")[1]) % 60,
+                Integer.parseInt(line[index].split(":")[2]) % 60);
+        log.debug("Reformat time: {} to {}", line[index], time);
+        return time;
     }
 
     /**
@@ -366,6 +438,14 @@ public class ParseTimetableService {
      */
     @Builder
     record RouteLine(String routeId, String directionId, List<RouteLineStop> routeLineStops) {
+        @Override
+        public String toString() {
+            return "RouteLine{" +
+                    "routeId='" + routeId + '\'' +
+                    ", directionId='" + directionId + '\'' +
+                    ", routeLineStops=" + routeLineStops.stream().map(RouteLineStop::toString).collect(Collectors.joining(",","[","]")) +
+                    '}';
+        }
     }
 
     /**
@@ -376,6 +456,13 @@ public class ParseTimetableService {
      */
     @Builder
     record RouteLineStop(Stop stop, StopTime stopTime) {
+        @Override
+        public String toString() {
+            return "{" +
+                    "stop=" + stop +
+                    ", stopTime=" + stopTime +
+                    '}';
+        }
     }
 
     @Builder
@@ -384,7 +471,7 @@ public class ParseTimetableService {
     }
 
     @Builder
-    record StopTime(String tripId, String arrivalTime, String departureTime, String stopId) {
+    record StopTime(String tripId, LocalTime arrivalTime, LocalTime departureTime, String stopId) {
 
     }
 
