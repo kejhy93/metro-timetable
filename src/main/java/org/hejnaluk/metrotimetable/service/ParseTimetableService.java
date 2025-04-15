@@ -128,15 +128,42 @@ public class ParseTimetableService {
 
         final var routesLines = calculateRouteLine(routeStopsList, stopsList, tripList, stopTimesList);
 
-        log.info ( "----------------------- PARSING DONE ------------------------" );
+        log.info("----------------------- PARSING DONE ------------------------");
 
-        for ( final var routeLine : routesLines ) {
+        final var routeIdDirectionCache = new HashMap<String, TreeMap<LocalTime, List<CompleteStop>>>();
+        for (final var routeLine : routesLines) {
 //            log.info("Route line: {}", routeLine.toString());
             final var key = routeLine.routeId + "-" + routeLine.directionId;
             final var routeLineStops = routeLine.routeLineStops;
-            for ( final var route : routeLineStops) {
-                log.info("Process route line for routeId: {}, directionId: {}, arrivalTime: {}", routeLine.routeId, routeLine.directionId, route.stopTime.arrivalTime);
+            var firstArrivalTime = routeLine.routeLineStops.getFirst().stopTime.arrivalTime;
+            var listOfCompleteStop = new ArrayList<CompleteStop>();
+            for (final var route : routeLineStops) {
+//                log.info("Process route line for routeId: {}, directionId: {}, arrivalTime: {}", routeLine.routeId, routeLine.directionId, route.stopTime.arrivalTime);
+                listOfCompleteStop.add(CompleteStop.builder()
+                        .stopName(route.stop().stopName())
+                        .stopId(route.stop.stopId)
+                        .arrivalTime(route.stopTime.arrivalTime)
+                        .departureTime(route.stopTime.departureTime)
+                        .build());
             }
+            log.info("First arrival time: {}", firstArrivalTime);
+            log.info("Store key: {} in cacheListStopByRouteIdAndDirectionId", key);
+            final var orDefault = routeIdDirectionCache.getOrDefault(key, new TreeMap<>());
+            orDefault.put(firstArrivalTime, listOfCompleteStop);
+            routeIdDirectionCache.put(key, orDefault);
+        }
+
+        for (final var entry : routeIdDirectionCache.entrySet()) {
+            final var key = entry.getKey();
+            final var value = entry.getValue();
+            log.info("Start Key: {} value: {}", key, value);
+            for (final var entry2 : value.entrySet()) {
+                final var key2 = entry2.getKey();
+                final var value2 = entry2.getValue();
+//                log.info("Key: {} value: {}", key2, value2.stream().map(CompleteStop::toString).collect(Collectors.joining(",", "[", "]")));
+                log.info("Key: {}", key2);
+            }
+            log.info("End Key: {} value: {}", key, value);
         }
     }
 
@@ -443,7 +470,7 @@ public class ParseTimetableService {
             return "RouteLine{" +
                     "routeId='" + routeId + '\'' +
                     ", directionId='" + directionId + '\'' +
-                    ", routeLineStops=" + routeLineStops.stream().map(RouteLineStop::toString).collect(Collectors.joining(",","[","]")) +
+                    ", routeLineStops=" + routeLineStops.stream().map(RouteLineStop::toString).collect(Collectors.joining(",", "[", "]")) +
                     '}';
         }
     }
@@ -468,6 +495,19 @@ public class ParseTimetableService {
     @Builder
     record Trip(String routeId, String tripId, String tripHeadsign, String tripShortName, String directionId) {
 
+    }
+
+    @Builder
+    record CompleteStop(String stopId, String stopName, LocalTime arrivalTime, LocalTime departureTime) {
+        @Override
+        public String toString() {
+            return "CompleteStop{" +
+                    "stopId='" + stopId + '\'' +
+                    ", stopName='" + stopName + '\'' +
+                    ", arrivalTime=" + arrivalTime +
+                    ", departureTime=" + departureTime +
+                    '}';
+        }
     }
 
     @Builder
