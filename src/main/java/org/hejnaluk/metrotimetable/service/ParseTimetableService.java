@@ -8,8 +8,8 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -115,21 +115,24 @@ public class ParseTimetableService {
 
     private static final Map<String, List<Stop>> cacheListStopByRouteIdAndDirectionId = new ConcurrentHashMap<>();
 
+    private static final Map<String, TreeMap<LocalTime, List<CompleteStop>>> routeIdDirectionCache = new ConcurrentHashMap<>();
+
     public void parseTimetableFiles() {
+        log.info("----------------------- PARSING START ------------------------");
         final var routesList = parseRoutes();
         final var routeStopsList = parseRouteStops();
         final var stopsList = parseStops();
         final var stopTimesList = parseStopTime();
         final var tripList = parseTrip(ROUTE_IDS);
 
-        log.info("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
-        log.info("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
-        log.info("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.debug("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
+        log.debug("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.debug("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
         final var routesLines = calculateRouteLine(routeStopsList, stopsList, tripList, stopTimesList);
-
         log.info("----------------------- PARSING DONE ------------------------");
 
+        log.info("------------------------ CACHE START ------------------------");
         final var routeIdDirectionCache = new HashMap<String, TreeMap<LocalTime, List<CompleteStop>>>();
         for (final var routeLine : routesLines) {
 //            log.info("Route line: {}", routeLine.toString());
@@ -148,32 +151,49 @@ public class ParseTimetableService {
             }
             log.info("First arrival time: {}", firstArrivalTime);
             log.info("Store key: {} in cacheListStopByRouteIdAndDirectionId", key);
-            final var orDefault = routeIdDirectionCache.getOrDefault(key, new TreeMap<>());
-            orDefault.put(firstArrivalTime, listOfCompleteStop);
-            routeIdDirectionCache.put(key, orDefault);
+            final var cache = routeIdDirectionCache.getOrDefault(key, new TreeMap<>());
+            cache.put(firstArrivalTime, listOfCompleteStop);
+            routeIdDirectionCache.put(key, cache);
         }
+        log.info("------------------------ CACHE DONE ------------------------");
 
+
+        log.info("------------------------ VERIFY START ------------------------");
         for (final var entry : routeIdDirectionCache.entrySet()) {
             final var key = entry.getKey();
             final var value = entry.getValue();
-            log.info("Start Key: {} value: {}", key, value);
+            log.debug("Start Key: {} value: {}", key, value);
             for (final var entry2 : value.entrySet()) {
                 final var key2 = entry2.getKey();
                 final var value2 = entry2.getValue();
 //                log.info("Key: {} value: {}", key2, value2.stream().map(CompleteStop::toString).collect(Collectors.joining(",", "[", "]")));
-                log.info("Key: {}", key2);
+                log.info("Key: {}", DateTimeFormatter.ofPattern("HH:mm:ss").format(key2));
             }
-            log.info("End Key: {} value: {}", key, value);
+            log.debug("End Key: {} value: {}", key, value);
         }
+        log.info("------------------------ VERIFY DONE ------------------------");
     }
 
+    /**
+     * Calculates the list of RouteLine objects for the given route stops, stops, trips, and stop times.
+     * <p>
+     * This method iterates through the provided trips and, for each trip, calculates the stops and stop times
+     * for the corresponding route and direction. It then creates a RouteLine object containing this information.
+     * <p>
+     * The resulting list of RouteLine objects represents the routes and their associated stops and stop times.
+     *
+     * @param routeStopsList The list of all route stops.
+     * @param stopsList      The list of all stops.
+     * @param tripList       The list of all trips.
+     * @param stopTimeList   The list of all stop times.
+     * @return A list of RouteLine objects, each representing a route and its associated stops and stop times.
+     */
     private List<RouteLine> calculateRouteLine(List<RouteStop> routeStopsList, List<Stop> stopsList, List<Trip> tripList, List<StopTime> stopTimeList) {
         final var routeLinesList = new ArrayList<RouteLine>();
-
         for (final var trip : tripList) {
             final var routeId = trip.routeId();
             final var directionId = trip.directionId();
-            log.info("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
+            log.debug("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
             final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, directionId);
             if (routeId.equals(trip.routeId)) {
                 final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip, routeId, directionId);
@@ -182,13 +202,12 @@ public class ParseTimetableService {
                         .directionId(directionId)
                         .routeLineStops(stopTimes)
                         .build();
-                log.info("Route stops for direction: {}", stopList.stream()
+                log.debug("Route stops for direction: {}", stopList.stream()
                         .map(Stop::toString)
                         .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
                 routeLinesList.add(routeLine);
             }
         }
-
         return routeLinesList;
     }
 
@@ -221,7 +240,7 @@ public class ParseTimetableService {
                             .build();
                 })
                 .toList();
-        log.info("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
+        log.debug("Stop times for trip {}: {}", trip.tripId, stopTimes.stream()
                 .map(RouteLineStop::toString)
                 .collect(Collectors.joining(",\n\t", "\n[\n\t", "\n]")));
         return stopTimes;
@@ -353,10 +372,14 @@ public class ParseTimetableService {
      * @return A reformatted time string in the format `HH:mm:ss`.
      */
     private String reformatHoursFormat(String[] line, int index) {
+        final var hour = line[index].split(":")[0];
+        final var minute = line[index].split(":")[1];
+        final var second = line[index].split(":")[2].isEmpty() || line[index].split(":")[2].isBlank() ? "0" : line[index].split(":")[2];
+
         final var time = String.format("%02d:%02d:%02d",
-                Integer.parseInt(line[index].split(":")[0]) % 24,
-                Integer.parseInt(line[index].split(":")[1]) % 60,
-                Integer.parseInt(line[index].split(":")[2]) % 60);
+                Integer.parseInt(hour) % 24,
+                Integer.parseInt(minute) % 60,
+                Integer.parseInt(second) % 60);
         log.debug("Reformat time: {} to {}", line[index], time);
         return time;
     }
@@ -504,8 +527,8 @@ public class ParseTimetableService {
             return "CompleteStop{" +
                     "stopId='" + stopId + '\'' +
                     ", stopName='" + stopName + '\'' +
-                    ", arrivalTime=" + arrivalTime +
-                    ", departureTime=" + departureTime +
+                    ", arrivalTime=" + DateTimeFormatter.ofPattern("HH:mm:ss").format(arrivalTime) +
+                    ", departureTime=" + DateTimeFormatter.ofPattern("HH:mm:ss").format(departureTime) +
                     '}';
         }
     }
