@@ -136,7 +136,7 @@ public class ParseTimetableService {
         log.info("------------------------ CACHE START ------------------------");
         for (final var routeLine : routesLines) {
             log.debug("Route line: {}", routeLine.toString());
-            final var key = routeLine.routeId + "-" + routeLine.directionId;
+            final var key = getKeyForRouteIdDirectionId(routeLine);
             final var routeLineStops = routeLine.routeLineStops;
             var firstArrivalTime = routeLine.routeLineStops.getFirst().stopTime.arrivalTime;
             var listOfCompleteStop = new ArrayList<CompleteStop>();
@@ -174,6 +174,10 @@ public class ParseTimetableService {
         log.info("------------------------ VERIFY DONE ------------------------");
     }
 
+    private String getKeyForRouteIdDirectionId(org.hejnaluk.metrotimetable.service.ParseTimetableService.RouteLine routeLine) {
+        return routeLine.routeId + "-" + routeLine.directionId;
+    }
+
     /**
      * Formats a given `LocalTime` object into a string representation.
      * <p>
@@ -208,18 +212,16 @@ public class ParseTimetableService {
             final var directionId = trip.directionId();
             log.debug("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
             final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, directionId);
-            if (routeId.equals(trip.routeId)) {
-                final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip);
-                final var routeLine = RouteLine.builder()
-                        .routeId(routeId)
-                        .directionId(directionId)
-                        .routeLineStops(stopTimes)
-                        .build();
-                log.debug("Route stops for direction: {}", stopList.stream()
-                        .map(Stop::toString)
-                        .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
-                routeLinesList.add(routeLine);
-            }
+            final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip);
+            final var routeLine = RouteLine.builder()
+                    .routeId(routeId)
+                    .directionId(directionId)
+                    .routeLineStops(stopTimes)
+                    .build();
+            log.debug("Route stops for direction: {}", stopList.stream()
+                    .map(Stop::toString)
+                    .collect(Collectors.joining(NEW_LINE_AND_TAB, "\n[\n\t", "\n]")));
+            routeLinesList.add(routeLine);
         }
         return routeLinesList;
     }
@@ -267,7 +269,7 @@ public class ParseTimetableService {
      * @return A list of stops corresponding to the given route and direction.
      */
     private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, List<Stop> stopsList, String direction) {
-        final var key = routeId + "-" + direction;
+        final var key = getKeyForStopsMap(routeId, direction);
 
         if (cacheListStopByRouteIdAndDirectionId.containsKey(key)) {
             log.debug("Found key: {} in cacheListStopByRouteIdAndDirectionId", key);
@@ -291,6 +293,10 @@ public class ParseTimetableService {
         cacheListStopByRouteIdAndDirectionId.put(key, value);
 
         return value;
+    }
+
+    private String getKeyForStopsMap(String routeId, String direction) {
+        return routeId + "-" + direction;
     }
 
     /**
@@ -347,7 +353,7 @@ public class ParseTimetableService {
         try {
             return Files.readString(Path.of(STOP_TIME_FILE_NAME))
                     .lines()
-                    .skip(1)
+                    .skip(1) // skip first line because it is column description
                     .map(line -> line.split(DELIMITER))
                     .map(line -> {
                         final var arrivalTime = reformatHoursFormat(line, STOP_TIME_ARRIVAL_TIME);
@@ -383,9 +389,10 @@ public class ParseTimetableService {
      * @return A reformatted time string in the format `HH:mm:ss`.
      */
     private String reformatHoursFormat(String[] line, int index) {
-        final var hour = line[index].split(":")[0];
-        final var minute = line[index].split(":")[1];
-        final var second = line[index].split(":")[2].isEmpty() || line[index].split(":")[2].isBlank() ? "0" : line[index].split(":")[2];
+        final var splittedString = line[index].split(":");
+        final var hour = splittedString[0];
+        final var minute = splittedString[1];
+        final var second = splittedString[2].isEmpty() || splittedString[2].isBlank() ? "0" : splittedString[2];
 
         final var time = String.format("%02d:%02d:%02d",
                 Integer.parseInt(hour) % 24,
