@@ -1,3 +1,11 @@
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/kejhy93/metro-timetable/tree/main.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/kejhy93/metro-timetable/tree/main)
+<br>
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=kejhy93_metro-timetable&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=kejhy93_metro-timetable)
+<br>
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=kejhy93_metro-timetable&metric=bugs)](https://sonarcloud.io/summary/new_code?id=kejhy93_metro-timetable)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=kejhy93_metro-timetable&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=kejhy93_metro-timetable)
+
+
 # Metro Timetable
 
 This repository contains a Java-based application that provides metro timetable functionalities. It is designed to help users access and manage metro schedules efficiently.
@@ -8,6 +16,7 @@ This repository contains a Java-based application that provides metro timetable 
 - Search for specific metro schedules by station or time.
 - Manage and update metro timetable data.
 - User-friendly interface for quick navigation.
+- GTFS format https://gtfs.org/documentation/schedule/reference/#stop_timestxt
 
 ## Installation
 
