@@ -41,6 +41,11 @@ This repository contains a Java-based application that provides metro timetable 
 ## Technologies Used
 
 - **Java**: The core programming language used for this project.
+- **Spring Boot**: Framework for building the application.
+- **Maven**: Dependency management and build tool.
+- **JUnit**: Testing framework for unit tests.
+- **SonarCloud**: Code quality and security analysis.
+- **CircleCI**: Continuous integration and deployment.
 
 ## Contributing
 
