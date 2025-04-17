@@ -13,6 +13,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -115,7 +116,7 @@ public class ParseTimetableService {
 
     private static final Map<String, List<Stop>> cacheListStopByRouteIdAndDirectionId = new ConcurrentHashMap<>();
 
-    private static final Map<String, TreeMap<LocalTime, List<CompleteStop>>> routeIdDirectionCache = new ConcurrentHashMap<>();
+    private static final Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> routeIdDirectionCache = new ConcurrentHashMap<>();
 
     public void parseTimetableFiles() {
         log.info("----------------------- PARSING START ------------------------");
@@ -150,7 +151,7 @@ public class ParseTimetableService {
             }
             log.info("First arrival time: {}", firstArrivalTime);
             log.info("Store key: {} in cacheListStopByRouteIdAndDirectionId", key);
-            final var cache = routeIdDirectionCache.getOrDefault(key, new TreeMap<>());
+            final var cache = routeIdDirectionCache.getOrDefault(key, new ConcurrentSkipListMap<>());
             cache.put(firstArrivalTime, listOfCompleteStop);
             routeIdDirectionCache.put(key, cache);
         }
