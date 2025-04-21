@@ -1,5 +1,7 @@
 package org.hejnaluk.metrotimetable.service;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +22,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class ParseTimetableService {
+
+    private final MeterRegistry meterRegistry;
 
     /**
      * Get path to the file containing routes information
@@ -120,20 +124,34 @@ public class ParseTimetableService {
 
     public void parseTimetableFiles() {
         log.info("----------------------- PARSING START ------------------------");
+        io.micrometer.core.instrument.Timer fileParseTimer = io.micrometer.core.instrument.Timer.builder("file.parse")
+                .description("Time taken to parse files")
+                .register(meterRegistry);
+        io.micrometer.core.instrument.Timer.Sample fileParseTimeSample = Timer.start();
         final var routesList = parseRoutes();
         final var routeStopsList = parseRouteStops();
         final var stopsList = parseStops();
         final var stopTimesList = parseStopTime();
         final var tripList = parseTrip(routeIds);
+        fileParseTimeSample.stop(fileParseTimer);
 
         log.debug("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
         log.debug("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
         log.debug("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
+        io.micrometer.core.instrument.Timer logicBuildTimer = io.micrometer.core.instrument.Timer.builder("create.releationship")
+                .description("Time taken to create relationships")
+                .register(meterRegistry);
+        io.micrometer.core.instrument.Timer.Sample logicBuildTimeSample = Timer.start();
         final var routesLines = calculateRouteLine(routeStopsList, stopsList, tripList, stopTimesList);
+        logicBuildTimeSample.stop(logicBuildTimer);
         log.info("----------------------- PARSING DONE ------------------------");
 
         log.info("------------------------ CACHE START ------------------------");
+        io.micrometer.core.instrument.Timer cacheBuildTimer = io.micrometer.core.instrument.Timer.builder("create.cache")
+                .description("Time taken to create cache")
+                .register(meterRegistry);
+        io.micrometer.core.instrument.Timer.Sample cacheBuildTimeSample = Timer.start();
         for (final var routeLine : routesLines) {
             log.debug("Route line: {}", routeLine.toString());
             final var key = getKeyForRouteIdDirectionId(routeLine);
@@ -155,6 +173,7 @@ public class ParseTimetableService {
             cache.put(firstArrivalTime, listOfCompleteStop);
             routeIdDirectionCache.put(key, cache);
         }
+        cacheBuildTimeSample.stop(cacheBuildTimer);
         log.info("------------------------ CACHE DONE ------------------------");
 
 
