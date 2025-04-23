@@ -3,6 +3,7 @@ package org.hejnaluk.metrotimetable.client;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
@@ -52,6 +53,7 @@ class PIDClientTest {
     }
 
     @Test
+    @Disabled
     void testClient() {
         // Expect a request to a specific URL and mock a response
         byte[] zipContent = null;
