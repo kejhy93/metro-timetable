@@ -26,8 +26,8 @@ class PIDControllerTest {
     }
 
     @Test
-    void get() {
-        controller.get();
+    void getTimetableChange() {
+        controller.getTimetableChange();
 
         Mockito.verify(pidClient, times(1)).getData();
     }

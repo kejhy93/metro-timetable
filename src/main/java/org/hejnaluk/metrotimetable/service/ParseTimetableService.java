@@ -18,6 +18,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
+import static org.hejnaluk.metrotimetable.client.PIDClient.ROOT_PATH_FILE;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -336,7 +338,7 @@ public class ParseTimetableService {
      */
     private List<Trip> parseTrip(Set<String> routeIds) {
         try {
-            return Files.readString(Path.of(TRIP_FILE_NAME))
+            return Files.readString(Path.of(ROOT_PATH_FILE, TRIP_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
                     .filter(line -> routeIds.contains(line[TRIP_ROUTE_ID]))
@@ -370,7 +372,7 @@ public class ParseTimetableService {
      */
     private List<StopTime> parseStopTime() {
         try {
-            return Files.readString(Path.of(STOP_TIME_FILE_NAME))
+            return Files.readString(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))
                     .lines()
                     .skip(1) // skip first line because it is column description
                     .map(line -> line.split(DELIMITER))
@@ -437,7 +439,7 @@ public class ParseTimetableService {
      */
     private List<Stop> parseStops() {
         try {
-            return Files.readString(Path.of(STOPS_FILE_NAME))
+            return Files.readString(Path.of(ROOT_PATH_FILE, STOPS_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
                     .map(line -> Stop.builder()
@@ -467,7 +469,7 @@ public class ParseTimetableService {
      */
     private List<RouteStop> parseRouteStops() {
         try {
-            return Files.readString(Path.of(ROUTE_STOPS_FILE_NAME))
+            return Files.readString(Path.of(ROOT_PATH_FILE, ROUTE_STOPS_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
                     .map(line -> RouteStop.builder()
@@ -496,7 +498,7 @@ public class ParseTimetableService {
      */
     private List<Route> parseRoutes() {
         try {
-            return Files.readString(Path.of(ROUTES_FILE_NAME))
+            return Files.readString(Path.of(ROOT_PATH_FILE, ROUTES_FILE_NAME))
                     .lines()
                     .map(line -> line.split(DELIMITER))
                     .filter(line -> routeIds.contains(line[ROUTE_ROUTE_ID]))

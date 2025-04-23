@@ -20,7 +20,7 @@ public class PIDController {
     private final ParseTimetableService parseTimetableService;
 
     @GetMapping
-    public ResponseEntity<Void> get() {
+    public ResponseEntity<Void> getTimetableChange() {
         log.info("Hello");
         pidClient.getData();
 

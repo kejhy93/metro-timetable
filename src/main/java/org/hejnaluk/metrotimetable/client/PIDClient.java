@@ -17,11 +17,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -32,6 +34,7 @@ public class PIDClient {
 
     public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
     public static final int MAX_WEBCLIENT_MEMORY_IN_MB = 128;
+    public static final String ROOT_PATH_FILE = "/tmp/timetable/";
 
     @Value("${pid.client.days.offset:7}")
     private int daysOffset;
@@ -92,8 +95,12 @@ public class PIDClient {
      */
     private void writeSuccessful() {
         final var now = Instant.now();
+        final var path = Path.of(ROOT_PATH_FILE, SYNCHRONIZED_FILE_NAME);
+        if (isNotPubliclyWritable(path)) {
+            return;
+        }
         try {
-            Files.writeString(Path.of(SYNCHRONIZED_FILE_NAME), ZonedDateTime.ofInstant(now, ZoneOffset.UTC).toString());
+            Files.writeString(path, ZonedDateTime.ofInstant(now, ZoneOffset.UTC).toString());
         } catch (IOException e) {
             log.error("Failed to write synchronized file.", e);
             throw new WriteSyncFileException(e);
@@ -111,10 +118,14 @@ public class PIDClient {
     private boolean isDoClientCall() {
         boolean doClientCall;
         try {
-            final var syncPath = Path.of(SYNCHRONIZED_FILE_NAME);
+            final var syncPath = Path.of(ROOT_PATH_FILE, SYNCHRONIZED_FILE_NAME);
+            if (isNotPubliclyWritable(syncPath)) {
+                return false;
+            }
+            log.info("Synchronized file path is {}", syncPath.toAbsolutePath());
             final var exists = Files.exists(syncPath);
             if (exists) {
-                log.info("File exists");
+                log.info("Synchronized file exists");
                 final var syncString = Files.readString(syncPath);
 
                 final var parsedDateTime = getParsedDateTime(syncString);
@@ -124,7 +135,7 @@ public class PIDClient {
 
                 doClientCall = nowZonedDateTime.isAfter(parsedDateTime.orElse(ZonedDateTime.now()));
             } else {
-                log.info("File does not exist");
+                log.info("Synchronized file does not exist");
                 doClientCall = true;
             }
         } catch (IOException e) {
@@ -171,7 +182,12 @@ public class PIDClient {
                             log.info("File size: {} bytes", fileContent.length);
 
                             log.info("File name is {}", entry.getName());
-                            try (FileOutputStream finalFileOutputStream = new FileOutputStream(entry.getName())) {
+                            final var path = Path.of(ROOT_PATH_FILE, entry.getName());
+                            if (isNotPubliclyWritable(path)) {
+                                return;
+                            }
+                            log.info("Target file path is {}", path.toAbsolutePath());
+                            try (FileOutputStream finalFileOutputStream = new FileOutputStream(path.toAbsolutePath().toFile())) {
                                 finalFileOutputStream.write(fileContent);
                                 log.info("File created successfully.");
                             }
@@ -187,5 +203,21 @@ public class PIDClient {
             }
 
         }).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    public static boolean isNotPubliclyWritable(Path directory) {
+        try {
+            // Get the POSIX file permissions of the directory
+            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(directory);
+
+            // Check if the directory is writable by "others"
+            return !permissions.contains(PosixFilePermission.OTHERS_WRITE);
+        } catch (IOException e) {
+            log.error("Failed to check directory permissions: {}", e.getMessage());
+            return true;
+        } catch (UnsupportedOperationException e) {
+            log.error("POSIX file permissions are not supported on this file system: {}", e.getMessage());
+            return true;
+        }
     }
 }
