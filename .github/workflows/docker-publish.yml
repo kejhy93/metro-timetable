@@ -43,7 +43,7 @@ jobs:
         uses: actions/setup-java@v2
         with:
           java-version: '21'
-          distribution: 'adoptopenjdk'
+          distribution: 'temurin'
 
       # Build the Spring Boot app with Maven (you can change it to Gradle if needed)
       - name: Build with Maven
