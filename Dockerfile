@@ -9,7 +9,7 @@ COPY target/metro-timetable*.jar metro-timetable.jar
 
 # Create a directory where the file will be saved
 # Change permissions of the directory
-RUN mkdir -p /tmp/timetable && chmod 777 /tmp/timetable
+RUN mkdir -p /tmp/timetable && chmod -R 777 /tmp/timetable
 
 # Expose the port that your Spring Boot application will run on
 EXPOSE 8080
