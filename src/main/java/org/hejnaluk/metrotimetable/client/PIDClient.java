@@ -64,6 +64,8 @@ public class PIDClient {
         } else {
             log.info("Folder {} does not exist, creating it", folder.getAbsolutePath());
             if ( folder.mkdirs() ) {
+                folder.setWritable(true);
+                folder.setExecutable(true);
                 log.info("Folder {} created successfully", folder.getAbsolutePath());
             } else {
                 log.error("Failed to create folder {}", folder.getAbsolutePath());
@@ -110,9 +112,6 @@ public class PIDClient {
     private void writeSuccessful() {
         final var now = Instant.now();
         final var path = Path.of(folder.getAbsolutePath(), SYNCHRONIZED_FILE_NAME);
-        if (isNotPubliclyWritable(path)) {
-            return;
-        }
         try {
             Files.writeString(path, ZonedDateTime.ofInstant(now, ZoneOffset.UTC).toString());
         } catch (IOException e) {
@@ -133,9 +132,6 @@ public class PIDClient {
         boolean doClientCall;
         try {
             final var syncPath = Path.of(folder.getAbsolutePath(), SYNCHRONIZED_FILE_NAME);
-            if (isNotPubliclyWritable(syncPath)) {
-                return false;
-            }
             log.info("Synchronized file path is {}", syncPath.toAbsolutePath());
             final var exists = Files.exists(syncPath);
             if (exists) {
@@ -197,9 +193,6 @@ public class PIDClient {
 
                             log.info("File name is {}", entry.getName());
                             final var path = Path.of(folder.getAbsolutePath(), entry.getName());
-                            if (isNotPubliclyWritable(path)) {
-                                return;
-                            }
                             log.info("Target file path is {}", path.toAbsolutePath());
                             try (FileOutputStream finalFileOutputStream = new FileOutputStream(path.toAbsolutePath().toFile())) {
                                 finalFileOutputStream.write(fileContent);
@@ -217,21 +210,5 @@ public class PIDClient {
             }
 
         }).subscribeOn(Schedulers.boundedElastic());
-    }
-
-    public static boolean isNotPubliclyWritable(Path directory) {
-        try {
-            // Get the POSIX file permissions of the directory
-            Set<PosixFilePermission> permissions = Files.getPosixFilePermissions(directory);
-
-            // Check if the directory is writable by "others"
-            return !permissions.contains(PosixFilePermission.OTHERS_WRITE);
-        } catch (IOException e) {
-            log.error("Failed to check directory permissions: {}", e.getMessage());
-            return true;
-        } catch (UnsupportedOperationException e) {
-            log.error("POSIX file permissions are not supported on this file system: {}", e.getMessage());
-            return true;
-        }
     }
 }
