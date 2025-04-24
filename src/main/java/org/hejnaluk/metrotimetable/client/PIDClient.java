@@ -64,8 +64,6 @@ public class PIDClient {
         } else {
             log.info("Folder {} does not exist, creating it", folder.getAbsolutePath());
             if ( folder.mkdirs() ) {
-                folder.setWritable(true);
-                folder.setExecutable(true);
                 log.info("Folder {} created successfully", folder.getAbsolutePath());
             } else {
                 log.error("Failed to create folder {}", folder.getAbsolutePath());
