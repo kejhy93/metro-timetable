@@ -11,12 +11,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.io.ByteArrayOutputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -43,6 +41,8 @@ public class PIDClient {
 
     private WebClient webClient;
 
+    private final File folder;
+
     @Autowired
     public PIDClient(WebClient.Builder webClientBuilder,
                      @Value("${pid.client.path:''}")
@@ -55,6 +55,20 @@ public class PIDClient {
                         .defaultCodecs()
                         .maxInMemorySize(MAX_WEBCLIENT_MEMORY_IN_MB * 1024 * 1024)) // 128 MB
                 .build();
+        log.info("WebClient initialized with base URL: {}", pathTOFile);
+        log.info("WebClient initialized with max memory size: {} MB", MAX_WEBCLIENT_MEMORY_IN_MB);
+
+        folder = Paths.get("/tmp", "/timetable").toFile();
+        if ( folder.exists() && folder.isDirectory() ) {
+            log.info("Folder {} exists", folder.getAbsolutePath());
+        } else {
+            log.info("Folder {} does not exist, creating it", folder.getAbsolutePath());
+            if ( folder.mkdirs() ) {
+                log.info("Folder {} created successfully", folder.getAbsolutePath());
+            } else {
+                log.error("Failed to create folder {}", folder.getAbsolutePath());
+            }
+        }
     }
 
     public void getData() {
@@ -95,7 +109,7 @@ public class PIDClient {
      */
     private void writeSuccessful() {
         final var now = Instant.now();
-        final var path = Path.of(ROOT_PATH_FILE, SYNCHRONIZED_FILE_NAME);
+        final var path = Path.of(folder.getAbsolutePath(), SYNCHRONIZED_FILE_NAME);
         if (isNotPubliclyWritable(path)) {
             return;
         }
@@ -118,7 +132,7 @@ public class PIDClient {
     private boolean isDoClientCall() {
         boolean doClientCall;
         try {
-            final var syncPath = Path.of(ROOT_PATH_FILE, SYNCHRONIZED_FILE_NAME);
+            final var syncPath = Path.of(folder.getAbsolutePath(), SYNCHRONIZED_FILE_NAME);
             if (isNotPubliclyWritable(syncPath)) {
                 return false;
             }
@@ -182,7 +196,7 @@ public class PIDClient {
                             log.info("File size: {} bytes", fileContent.length);
 
                             log.info("File name is {}", entry.getName());
-                            final var path = Path.of(ROOT_PATH_FILE, entry.getName());
+                            final var path = Path.of(folder.getAbsolutePath(), entry.getName());
                             if (isNotPubliclyWritable(path)) {
                                 return;
                             }
