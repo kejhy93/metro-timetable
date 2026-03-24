@@ -31,7 +31,7 @@ class PIDClientTest {
     void setUp() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new PIDClient(RestClient.builder(), "http://localhost:" + server.getPort());
+        client = new PIDClient("http://localhost:" + server.getPort());
         Files.deleteIfExists(SYNC_FILE);
         Files.deleteIfExists(EXTRACTED_FILE);
     }

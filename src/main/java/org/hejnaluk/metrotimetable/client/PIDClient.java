@@ -2,6 +2,7 @@ package org.hejnaluk.metrotimetable.client;
 
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
@@ -33,11 +34,11 @@ public class PIDClient {
     private final RestClient restClient;
     private final File folder;
 
-    public PIDClient(RestClient.Builder restClientBuilder,
-                     @Value("${pid.client.path:''}") String pathToFile) {
+    @Autowired
+    public PIDClient(@Value("${pid.client.path:''}") String pathToFile) {
         this.pathToFile = pathToFile;
         log.info("Init PIDClient address is: {}", pathToFile);
-        this.restClient = restClientBuilder
+        this.restClient = RestClient.builder()
                 .baseUrl(pathToFile)
                 .build();
 
