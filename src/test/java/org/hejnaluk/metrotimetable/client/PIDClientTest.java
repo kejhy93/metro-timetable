@@ -6,7 +6,6 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -31,7 +30,7 @@ class PIDClientTest {
     void setUp() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new PIDClient(RestClient.builder(), "http://localhost:" + server.getPort());
+        client = new PIDClient("http://localhost:" + server.getPort());
         Files.deleteIfExists(SYNC_FILE);
         Files.deleteIfExists(EXTRACTED_FILE);
     }
