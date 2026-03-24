@@ -145,10 +145,8 @@ public class PIDClient {
              ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
             ZipEntry entry;
             while ((entry = zipInputStream.getNextEntry()) != null) {
-                Path path = Path.of(folder.getAbsolutePath(), entry.getName());
-                if (entry.isDirectory()) {
-                    Files.createDirectories(path);
-                } else {
+                if (!entry.isDirectory()) {
+                    Path path = Path.of(folder.getAbsolutePath(), Paths.get(entry.getName()).getFileName().toString());
                     Files.createDirectories(path.getParent());
                     try (FileOutputStream out = new FileOutputStream(path.toFile())) {
                         byte[] buffer = new byte[8192];
