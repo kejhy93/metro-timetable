@@ -66,7 +66,7 @@ public class PIDClient {
                 .retrieve()
                 .body(byte[].class);
 
-        log.info("Received ZIP file of size: {}", zipData.length);
+        log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
         extractZip(zipData);
         log.info("ZIP extraction completed");
 
@@ -111,7 +111,7 @@ public class PIDClient {
                 final var parsedDateTime = getParsedDateTime(syncString);
 
                 final var now = Instant.now();
-                ZonedDateTime nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(daysOffset);
+                final var nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(daysOffset);
 
                 doClientCall = nowZonedDateTime.isAfter(parsedDateTime.orElse(ZonedDateTime.now()));
             } else {
@@ -145,25 +145,19 @@ public class PIDClient {
              ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
             ZipEntry entry;
             while ((entry = zipInputStream.getNextEntry()) != null) {
-                log.info("Extracting: {}", entry.getName());
-                if (!entry.isDirectory()) {
-                    try (ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream()) {
-                        byte[] buffer = new byte[1024];
+                Path path = Path.of(folder.getAbsolutePath(), entry.getName());
+                if (entry.isDirectory()) {
+                    Files.createDirectories(path);
+                } else {
+                    Files.createDirectories(path.getParent());
+                    try (FileOutputStream out = new FileOutputStream(path.toFile())) {
+                        byte[] buffer = new byte[8192];
                         int length;
                         while ((length = zipInputStream.read(buffer)) > 0) {
-                            fileOutputStream.write(buffer, 0, length);
-                        }
-
-                        byte[] fileContent = fileOutputStream.toByteArray();
-                        log.info("File size: {} bytes", fileContent.length);
-
-                        final var path = Path.of(folder.getAbsolutePath(), entry.getName());
-                        log.info("Target file path is {}", path.toAbsolutePath());
-                        try (FileOutputStream finalFileOutputStream = new FileOutputStream(path.toAbsolutePath().toFile())) {
-                            finalFileOutputStream.write(fileContent);
-                            log.info("File created successfully.");
+                            out.write(buffer, 0, length);
                         }
                     }
+                    log.info("Extracted: {}", entry.getName());
                 }
                 zipInputStream.closeEntry();
             }
