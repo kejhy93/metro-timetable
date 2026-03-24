@@ -1,5 +1,5 @@
 # Use a base image with Java 25
-FROM openjdk:25
+FROM eclipse-temurin:25
 
 # Set the working directory in the container
 WORKDIR /app
