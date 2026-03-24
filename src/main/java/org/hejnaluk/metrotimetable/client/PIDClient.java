@@ -1,69 +1,52 @@
 package org.hejnaluk.metrotimetable.client;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
+import org.springframework.web.client.RestClient;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.PosixFilePermission;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
-import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class PIDClient {
 
     public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
-    public static final int MAX_WEBCLIENT_MEMORY_IN_MB = 128;
     public static final String ROOT_PATH_FILE = "/tmp/timetable/";
 
     @Value("${pid.client.days.offset:7}")
     private int daysOffset;
 
-    private String pathTOFile;
-
-    private WebClient webClient;
-
+    private final String pathToFile;
+    private final RestClient restClient;
     private final File folder;
 
-    @Autowired
-    public PIDClient(WebClient.Builder webClientBuilder,
-                     @Value("${pid.client.path:''}")
-                     String pathTOFile) {
-        this.pathTOFile = pathTOFile;
-        log.info("Init PIDClient address is: {}", pathTOFile);
-        this.webClient = webClientBuilder
-                .baseUrl(pathTOFile)
-                .codecs(config -> config
-                        .defaultCodecs()
-                        .maxInMemorySize(MAX_WEBCLIENT_MEMORY_IN_MB * 1024 * 1024)) // 128 MB
+    public PIDClient(RestClient.Builder restClientBuilder,
+                     @Value("${pid.client.path:''}") String pathToFile) {
+        this.pathToFile = pathToFile;
+        log.info("Init PIDClient address is: {}", pathToFile);
+        this.restClient = restClientBuilder
+                .baseUrl(pathToFile)
                 .build();
-        log.info("WebClient initialized with base URL: {}", pathTOFile);
-        log.info("WebClient initialized with max memory size: {} MB", MAX_WEBCLIENT_MEMORY_IN_MB);
 
         folder = Paths.get("/tmp", "/timetable").toFile();
-        if ( folder.exists() && folder.isDirectory() ) {
+        if (folder.exists() && folder.isDirectory()) {
             log.info("Folder {} exists", folder.getAbsolutePath());
         } else {
             log.info("Folder {} does not exist, creating it", folder.getAbsolutePath());
-            if ( folder.mkdirs() ) {
+            if (folder.mkdirs()) {
                 log.info("Folder {} created successfully", folder.getAbsolutePath());
             } else {
                 log.error("Failed to create folder {}", folder.getAbsolutePath());
@@ -72,33 +55,22 @@ public class PIDClient {
     }
 
     public void getData() {
-        log.info("PIDClient address is: {}", pathTOFile);
-        if ( !isDoClientCall() ) {
+        log.info("PIDClient address is: {}", pathToFile);
+        if (!isDoClientCall()) {
             log.info("Client call is not needed");
             return;
         }
 
-        // REACTIVE
-        // Use WebClient to download the ZIP file as a byte array
-        webClient
-                .get()
+        byte[] zipData = restClient.get()
                 .header(HttpHeaders.ACCEPT, "application/zip")
                 .retrieve()
-                .bodyToMono(byte[].class)
-                .checkpoint("After bodyToMono")
-                .doOnNext(bytes -> log.info("Received ZIP file of size: {}", bytes.length))
-                .flatMap(this::extractZipInMemory)
-                .checkpoint("After extractZipInMemory")
-                .doOnSuccess(v -> log.info("ZIP extraction completed"))
-                .then(Mono.just("ZIP file downloaded and extracted successfully in memory!"))
-                .onErrorResume(e -> {
-                    log.error("Failed to download or extract ZIP", e);
-                    return Mono.error(e);
-                })
-                .block();
+                .body(byte[].class);
+
+        log.info("Received ZIP file of size: {}", zipData.length);
+        extractZip(zipData);
+        log.info("ZIP extraction completed");
 
         writeSuccessful();
-
         log.info("All files are downloaded and extracted successfully in memory!");
     }
 
@@ -168,45 +140,36 @@ public class PIDClient {
         }
     }
 
-    // Method to extract the ZIP file in memory from a byte array
-    private Mono<Void> extractZipInMemory(byte[] zipData) {
-        return Mono.<Void>create(sink -> {
-            try (InputStream inputStream = new java.io.ByteArrayInputStream(zipData);
-                 ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
-                ZipEntry entry;
-                while ((entry = zipInputStream.getNextEntry()) != null) {
-                    log.info("Extracting: {}", entry.getName());
-                    // If the entry is a file, read the content
-                    if (!entry.isDirectory()) {
-                        try (ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream()) {
-                            byte[] buffer = new byte[1024];
-                            int length;
-                            while ((length = zipInputStream.read(buffer)) > 0) {
-                                fileOutputStream.write(buffer, 0, length);
-                            }
-
-                            // File content is now in memory
-                            byte[] fileContent = fileOutputStream.toByteArray();
-                            log.info("File size: {} bytes", fileContent.length);
-
-                            log.info("File name is {}", entry.getName());
-                            final var path = Path.of(folder.getAbsolutePath(), entry.getName());
-                            log.info("Target file path is {}", path.toAbsolutePath());
-                            try (FileOutputStream finalFileOutputStream = new FileOutputStream(path.toAbsolutePath().toFile())) {
-                                finalFileOutputStream.write(fileContent);
-                                log.info("File created successfully.");
-                            }
+    private void extractZip(byte[] zipData) {
+        try (InputStream inputStream = new ByteArrayInputStream(zipData);
+             ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
+            ZipEntry entry;
+            while ((entry = zipInputStream.getNextEntry()) != null) {
+                log.info("Extracting: {}", entry.getName());
+                if (!entry.isDirectory()) {
+                    try (ByteArrayOutputStream fileOutputStream = new ByteArrayOutputStream()) {
+                        byte[] buffer = new byte[1024];
+                        int length;
+                        while ((length = zipInputStream.read(buffer)) > 0) {
+                            fileOutputStream.write(buffer, 0, length);
                         }
-                        // You can process the file content here (e.g., store, analyze, etc.)
-                    }
-                    zipInputStream.closeEntry();
-                    sink.success();
-                }
-            } catch (IOException e) {
-                log.error("Failed to download data.", e);
-                sink.error( e);
-            }
 
-        }).subscribeOn(Schedulers.boundedElastic());
+                        byte[] fileContent = fileOutputStream.toByteArray();
+                        log.info("File size: {} bytes", fileContent.length);
+
+                        final var path = Path.of(folder.getAbsolutePath(), entry.getName());
+                        log.info("Target file path is {}", path.toAbsolutePath());
+                        try (FileOutputStream finalFileOutputStream = new FileOutputStream(path.toAbsolutePath().toFile())) {
+                            finalFileOutputStream.write(fileContent);
+                            log.info("File created successfully.");
+                        }
+                    }
+                }
+                zipInputStream.closeEntry();
+            }
+        } catch (IOException e) {
+            log.error("Failed to extract ZIP.", e);
+            throw new UncheckedIOException(e);
+        }
     }
 }

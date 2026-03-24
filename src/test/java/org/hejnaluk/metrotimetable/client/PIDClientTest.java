@@ -2,72 +2,95 @@ package org.hejnaluk.metrotimetable.client;
 
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
+import okhttp3.mockwebserver.RecordedRequest;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.client.RestClientTest;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
-
-@RestClientTest(PIDClient.class)
 class PIDClientTest {
 
+    private static final Path SYNC_FILE = Path.of("/tmp/timetable", PIDClient.SYNCHRONIZED_FILE_NAME);
+    private static final Path EXTRACTED_FILE = Path.of("/tmp/timetable/testfile.txt");
 
     private PIDClient client;
-
     private MockWebServer server;
-
-    @Autowired
-    private WebClient.Builder webClientBuilder;
-
-    private static byte[] createZipFile() throws IOException {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        ZipOutputStream zos = new ZipOutputStream(baos);
-
-        // Create a ZIP entry
-        ZipEntry entry = new ZipEntry("testfile.txt");
-        zos.putNextEntry(entry);
-
-        // Write some content to the file inside the ZIP
-        zos.write("Hello, this is a test file.".getBytes());
-
-        zos.closeEntry();
-        zos.close();
-        return baos.toByteArray();
-    }
 
     @BeforeEach
     void setUp() throws IOException {
         server = new MockWebServer();
         server.start();
+        client = new PIDClient(RestClient.builder(), "http://localhost:" + server.getPort());
+        Files.deleteIfExists(SYNC_FILE);
+        Files.deleteIfExists(EXTRACTED_FILE);
+    }
 
-        client = new PIDClient(webClientBuilder, "http://localhost:" + server.getPort());
+    @AfterEach
+    void tearDown() throws IOException {
+        server.shutdown();
+        Files.deleteIfExists(SYNC_FILE);
+        Files.deleteIfExists(EXTRACTED_FILE);
     }
 
     @Test
-    @Disabled
-    void testClient() {
-        // Expect a request to a specific URL and mock a response
-        byte[] zipContent = null;
-        try {
-            zipContent = createZipFile();
-        } catch (IOException e) {
-            fail();
-        }
-
-        // Enqueue a response with the ZIP file content and Content-Type
+    void getData_downloadsAndExtractsZip_whenNoSyncFile() throws IOException, InterruptedException {
         server.enqueue(new MockResponse()
-                .setBody(new okio.Buffer().write(zipContent))  // Set the ZIP file as the body
+                .setBody(new okio.Buffer().write(createZipFile()))
                 .addHeader("Content-Type", "application/zip"));
 
         client.getData();
+
+        RecordedRequest request = server.takeRequest();
+        assertEquals("GET", request.getMethod());
+        assertEquals("application/zip", request.getHeader("Accept"));
+
+        assertTrue(Files.exists(EXTRACTED_FILE));
+        assertEquals("Hello, this is a test file.", Files.readString(EXTRACTED_FILE));
+        assertTrue(Files.exists(SYNC_FILE));
+    }
+
+    @Test
+    void getData_skipsDownload_whenSyncFileIsRecent() throws IOException {
+        // daysOffset is 0 in tests (no Spring injection), so "now.isAfter(futureTimestamp)" = false → skip
+        Files.writeString(SYNC_FILE, ZonedDateTime.now(ZoneOffset.UTC).plusHours(1).toString());
+
+        client.getData();
+
+        assertEquals(0, server.getRequestCount());
+    }
+
+    @Test
+    void getData_downloadsAgain_whenSyncFileIsStale() throws IOException {
+        // daysOffset is 0 in tests, so "now.isAfter(pastTimestamp)" = true → download
+        Files.writeString(SYNC_FILE, ZonedDateTime.now(ZoneOffset.UTC).minusHours(1).toString());
+
+        server.enqueue(new MockResponse()
+                .setBody(new okio.Buffer().write(createZipFile()))
+                .addHeader("Content-Type", "application/zip"));
+
+        client.getData();
+
+        assertEquals(1, server.getRequestCount());
+    }
+
+    private static byte[] createZipFile() throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry("testfile.txt"));
+            zos.write("Hello, this is a test file.".getBytes());
+            zos.closeEntry();
+        }
+        return baos.toByteArray();
     }
 }
