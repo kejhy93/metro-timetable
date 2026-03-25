@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
+import static java.nio.file.Files.lines;
 import static org.hejnaluk.metrotimetable.client.PIDClient.ROOT_PATH_FILE;
 
 @Service
@@ -384,9 +385,9 @@ public class ParseTimetableService {
         if (tripIds.isEmpty()) {
             return List.of();
         }
-
-        try (final var lines = Files.lines(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))) {
-            return lines
+        try {
+            return Files.readString(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))
+                    .lines()
                     .skip(1) // skip first line because it is column description
                     .map(line -> line.split(DELIMITER))
                     .filter(line -> tripIds.contains(line[STOP_TIME_TRIP_ID]))
