@@ -12,11 +12,14 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -29,6 +32,9 @@ public class PIDClient {
 
     @Value("${pid.client.days.offset:7}")
     private int daysOffset;
+
+    @Value("${pid.client.routes.ids:}")
+    private Set<String> routeIds;
 
     private final String pathToFile;
     private final RestClient restClient;
@@ -55,11 +61,16 @@ public class PIDClient {
         }
     }
 
-    public void getData() {
+    /**
+     * Downloads and extracts the GTFS ZIP if the local copy is stale.
+     *
+     * @return {@code true} if fresh data was downloaded and extracted, {@code false} if the local copy was still fresh.
+     */
+    public boolean getData() {
         log.info("PIDClient address is: {}", pathToFile);
         if (!isDoClientCall()) {
             log.info("Client call is not needed");
-            return;
+            return false;
         }
 
         byte[] zipData = restClient.get()
@@ -71,8 +82,12 @@ public class PIDClient {
         extractZip(zipData);
         log.info("ZIP extraction completed");
 
+        filterStopTimes();
+        log.info("stop_times.txt pre-filtered");
+
         writeSuccessful();
         log.info("All files are downloaded and extracted successfully in memory!");
+        return true;
     }
 
     /**
@@ -138,6 +153,78 @@ public class PIDClient {
             return Optional.of(ZonedDateTime.parse(stringToParse));
         } catch (DateTimeParseException e) {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Pre-filters {@code stop_times.txt} to only retain rows for the configured routes.
+     * <p>
+     * The full Prague GTFS {@code stop_times.txt} has ~4 million rows across all transit modes.
+     * This method reduces it to only the rows needed by the configured route IDs (e.g. metro line A),
+     * so subsequent parses read ~10k rows instead of ~4M rows.
+     * <p>
+     * Steps:
+     * <ol>
+     *   <li>Read {@code trips.txt} (small) to collect trip IDs belonging to the configured routes.</li>
+     *   <li>Stream {@code stop_times.txt} line by line into a temp file, writing only the header
+     *       and rows whose trip ID is in the collected set.</li>
+     *   <li>Atomically replace {@code stop_times.txt} with the filtered temp file.</li>
+     * </ol>
+     */
+    private void filterStopTimes() {
+        if (routeIds == null || routeIds.isEmpty()) {
+            log.warn("No route IDs configured, skipping stop_times.txt pre-filtering");
+            return;
+        }
+        final Path tripsPath = Path.of(folder.getAbsolutePath(), "trips.txt");
+        final Path stopTimesPath = Path.of(folder.getAbsolutePath(), "stop_times.txt");
+        final Path tempPath = Path.of(folder.getAbsolutePath(), "stop_times_tmp.txt");
+
+        // Step 1: collect trip IDs for the configured routes from trips.txt.
+        // trips.txt format: route_id,service_id,trip_id,...
+        // route_id is field 0, trip_id is field 2.
+        final Set<String> relevantTripIds;
+        try (var lines = Files.lines(tripsPath)) {
+            relevantTripIds = lines
+                    .filter(line -> {
+                        int comma = line.indexOf(',');
+                        return comma > 0 && routeIds.contains(line.substring(0, comma));
+                    })
+                    .map(line -> line.split(",")[2])
+                    .collect(Collectors.toSet());
+        } catch (IOException e) {
+            log.error("Failed to read trips.txt while filtering stop_times.txt", e);
+            return;
+        }
+        log.info("Collected {} trip IDs for routes {}", relevantTripIds.size(), routeIds);
+
+        // Step 2: stream stop_times.txt into a temp file, keeping header + matching rows.
+        try (BufferedReader reader = Files.newBufferedReader(stopTimesPath);
+             BufferedWriter writer = Files.newBufferedWriter(tempPath)) {
+            // Always write the header line so ParseTimetableService can still skip(1).
+            String header = reader.readLine();
+            if (header != null) {
+                writer.write(header);
+                writer.newLine();
+            }
+            String line;
+            while ((line = reader.readLine()) != null) {
+                int comma = line.indexOf(',');
+                if (comma > 0 && relevantTripIds.contains(line.substring(0, comma))) {
+                    writer.write(line);
+                    writer.newLine();
+                }
+            }
+        } catch (IOException e) {
+            log.error("Failed to filter stop_times.txt", e);
+            return;
+        }
+
+        // Step 3: atomically replace the original with the filtered file.
+        try {
+            Files.move(tempPath, stopTimesPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.error("Failed to replace stop_times.txt with filtered version", e);
         }
     }
 
