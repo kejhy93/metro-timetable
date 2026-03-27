@@ -1,8 +1,8 @@
 package org.hejnaluk.metrotimetable.controller;
 
-import org.hejnaluk.metrotimetable.client.PIDClient;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
+import org.hejnaluk.metrotimetable.service.TimetableRefreshService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -19,7 +19,7 @@ import static org.mockito.Mockito.when;
 class PIDControllerTest {
 
     @Mock
-    private PIDClient pidClient;
+    private TimetableRefreshService timetableRefreshService;
     @Mock
     private ParseTimetableService parseTimetableService;
 
@@ -28,14 +28,14 @@ class PIDControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        controller = new PIDController(pidClient, parseTimetableService);
+        controller = new PIDController(timetableRefreshService, parseTimetableService);
     }
 
     @Test
     void getTimetableChange() {
         controller.getTimetableChange();
 
-        Mockito.verify(pidClient, times(1)).getData();
+        Mockito.verify(timetableRefreshService, times(1)).refresh();
     }
 
     @Test
