@@ -93,15 +93,36 @@ class ParseTimetableServiceTest {
     @Test
     void respectsLimit() {
         populateCache("L991-0", Map.of(
-                LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
-                LocalTime.of(14, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
-                LocalTime.of(15, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
-                LocalTime.of(16, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
+                LocalTime.of(13, 0), stopsAt(LocalTime.of(13, 0), "Depo Hostivař", "Muzeum", "Zličín"),
+                LocalTime.of(14, 0), stopsAt(LocalTime.of(14, 0), "Depo Hostivař", "Muzeum", "Zličín"),
+                LocalTime.of(15, 0), stopsAt(LocalTime.of(15, 0), "Depo Hostivař", "Muzeum", "Zličín"),
+                LocalTime.of(16, 0), stopsAt(LocalTime.of(16, 0), "Depo Hostivař", "Muzeum", "Zličín")
         ));
 
         List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 2);
 
         assertThat(result).hasSize(2);
+        assertThat(result)
+                .extracting(TrainDeparture::departureTime)
+                .containsExactly(
+                        LocalTime.of(13, 1),
+                        LocalTime.of(14, 1)
+                );
+    }
+
+    @Test
+    void returnsTrainsFromBothDirections_whenDirectionNull() {
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
+        ));
+        populateCache("L991-1", Map.of(
+                LocalTime.of(14, 0), stops("Zličín", "Muzeum", "Depo Hostivař")
+        ));
+
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(TrainDeparture::directionId).containsExactlyInAnyOrder(0, 1);
     }
 
     @Test

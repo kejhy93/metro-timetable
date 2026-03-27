@@ -276,7 +276,7 @@ public class ParseTimetableService {
             }
         }
 
-        int effectiveLimit = Math.min(limit, maxLimit);
+        int effectiveLimit = Math.clamp(limit, 0, maxLimit);
         List<TrainDeparture> finalResult = result.stream()
                 .sorted(Comparator.comparing(TrainDeparture::departureTime))
                 .limit(effectiveLimit)
@@ -376,6 +376,7 @@ public class ParseTimetableService {
                     final var stopId = stopTime.stopId;
                     final var stop = Optional.ofNullable(stopsMap.get(stopId))
                             .orElse(stopsMap.get(findOppositeStopId(stopId)));
+                    if (stop == null) throw new IllegalArgumentException("Stop not found: " + stopId);
                     return RouteLineStop.builder()
                             .stop(stop)
                             .stopTime(stopTime)
@@ -389,6 +390,10 @@ public class ParseTimetableService {
     }
 
     private String findOppositeStopId(String stopId) {
+        if (stopId == null || stopId.length() < 2) {
+            log.warn("Cannot find opposite stop ID for invalid stopId: {}", stopId);
+            return stopId;
+        }
         char secondLastChar = stopId.charAt(stopId.length() - 2);
         char newSecondLastChar = secondLastChar == '1' ? '2' : (secondLastChar == '2' ? '1' : secondLastChar);
         return stopId.substring(0, stopId.length() - 2) + newSecondLastChar + stopId.charAt(stopId.length() - 1);
