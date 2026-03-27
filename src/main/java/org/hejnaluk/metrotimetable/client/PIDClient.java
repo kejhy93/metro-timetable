@@ -233,6 +233,15 @@ public class PIDClient {
         }
     }
 
+    /**
+     * Extracts all non-directory entries from a ZIP byte array into {@link #ROOT_PATH_FILE}.
+     * <p>
+     * Each entry is written using its bare filename (directory components are stripped),
+     * so nested ZIP paths are flattened into the single target directory.
+     *
+     * @param zipData the raw bytes of the ZIP archive
+     * @throws UncheckedIOException if any I/O error occurs during extraction
+     */
     private void extractZip(byte[] zipData) {
         try (InputStream inputStream = new ByteArrayInputStream(zipData);
              ZipInputStream zipInputStream = new ZipInputStream(inputStream)) {
