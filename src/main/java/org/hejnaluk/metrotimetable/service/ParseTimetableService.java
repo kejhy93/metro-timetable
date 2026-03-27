@@ -145,6 +145,18 @@ public class ParseTimetableService {
 
     private static volatile TimetableData timetableData = TimetableData.empty();
 
+    /**
+     * Downloads (if stale), parses all GTFS files, and atomically replaces the in-memory cache.
+     * <p>
+     * Runs in three timed phases:
+     * <ol>
+     *   <li><b>file.parse</b> — reads {@code routes.txt}, {@code stops.txt}, {@code trips.txt},
+     *       {@code route_stops.txt}, and {@code stop_times.txt} in parallel where possible.</li>
+     *   <li><b>create.releationship</b> — joins the parsed data into {@link RouteLine} objects.</li>
+     *   <li><b>create.cache</b> — builds the route cache and station index, then swaps them
+     *       atomically so in-flight queries always see a consistent snapshot.</li>
+     * </ol>
+     */
     public void parseTimetableFiles() {
         log.info("----------------------- PARSING START ------------------------");
         io.micrometer.core.instrument.Timer fileParseTimer = io.micrometer.core.instrument.Timer.builder("file.parse")
@@ -229,10 +241,27 @@ public class ParseTimetableService {
                 newRouteCache.size(), newStationIndex.size());
     }
 
+    /**
+     * Returns the current local time. Overridable in tests to control the clock.
+     *
+     * @return the current {@link LocalTime}
+     */
     protected LocalTime getNow() {
         return LocalTime.now();
     }
 
+    /**
+     * Returns upcoming train departures from the given station.
+     * <p>
+     * Looks up the station in the station index for O(1) access, then collects departures
+     * whose departure time is not before the current time. Results are sorted by departure
+     * time and capped at {@code limit} (clamped to {@code [0, maxLimit]}).
+     *
+     * @param stationName the station name to query (case-insensitive)
+     * @param direction   optional direction filter ({@code 0} or {@code 1}); {@code null} returns both directions
+     * @param limit       maximum number of departures to return; clamped to {@code [0, maxLimit]}
+     * @return list of upcoming {@link TrainDeparture}s sorted by departure time, or an empty list if the station is not found
+     */
     public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit) {
         Timer timer = Timer.builder("station.query")
                 .description("Time taken to query trains for a station")
@@ -247,43 +276,51 @@ public class ParseTimetableService {
             return List.of();
         }
 
-        final List<TrainDeparture> result = new ArrayList<>();
         final LocalTime now = getNow();
+        final int effectiveLimit = Math.clamp(limit, 0, maxLimit);
 
-        for (Map.Entry<String, Integer> indexEntry : keyToStopIndex.entrySet()) {
-            final String key = indexEntry.getKey();
-            final int stopIndex = indexEntry.getValue();
-
-            if (direction != null && !key.endsWith("-" + direction)) continue;
-
-            final int lastDash = key.lastIndexOf('-');
-            final String routeId = key.substring(0, lastDash);
-            final int directionId = Integer.parseInt(key.substring(lastDash + 1));
-
-            final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
-            if (trips == null) continue;
-
-            for (List<CompleteStop> stops : trips.values()) {
-                if (stopIndex >= stops.size()) continue;
-                final LocalTime departureTime = stops.get(stopIndex).departureTime();
-                if (!departureTime.isBefore(now)) {
-                    final String destination = stops.getLast().stop().stopName();
-                    final List<String> upcomingStations = stops.subList(stopIndex, stops.size()).stream()
-                            .map(cs -> cs.stop().stopName())
-                            .toList();
-                    result.add(new TrainDeparture(routeId, directionId, departureTime, destination, upcomingStations));
-                }
-            }
-        }
-
-        int effectiveLimit = Math.clamp(limit, 0, maxLimit);
-        List<TrainDeparture> finalResult = result.stream()
+        List<TrainDeparture> result = keyToStopIndex.entrySet().stream()
+                .filter(e -> direction == null || e.getKey().endsWith("-" + direction))
+                .flatMap(e -> collectDepartures(e.getKey(), e.getValue(), snapshot, now))
                 .sorted(Comparator.comparing(TrainDeparture::departureTime))
                 .limit(effectiveLimit)
                 .toList();
 
         sample.stop(timer);
-        return finalResult;
+        return result;
+    }
+
+    /**
+     * Streams {@link TrainDeparture}s for a single route-direction key at the given stop index.
+     * <p>
+     * Only trips where the stop at {@code stopIndex} departs at or after {@code now} are included.
+     * The destination is taken from the last stop of the trip; upcoming stations are all stops
+     * from {@code stopIndex} onwards.
+     *
+     * @param key       the cache key in {@code "routeId-directionId"} format
+     * @param stopIndex the position of the queried station within each trip's stop list
+     * @param snapshot  the consistent timetable snapshot to read from
+     * @param now       the current time used to filter out past departures
+     * @return a stream of departures for this key, possibly empty
+     */
+    private Stream<TrainDeparture> collectDepartures(String key, int stopIndex, TimetableData snapshot, LocalTime now) {
+        final int lastDash = key.lastIndexOf('-');
+        final String routeId = key.substring(0, lastDash);
+        final int directionId = Integer.parseInt(key.substring(lastDash + 1));
+
+        final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
+        if (trips == null) return Stream.empty();
+
+        return trips.values().stream()
+                .filter(stops -> stopIndex < stops.size())
+                .filter(stops -> !stops.get(stopIndex).departureTime().isBefore(now))
+                .map(stops -> new TrainDeparture(
+                        routeId,
+                        directionId,
+                        stops.get(stopIndex).departureTime(),
+                        stops.getLast().stop().stopName(),
+                        stops.subList(stopIndex, stops.size()).stream().map(cs -> cs.stop().stopName()).toList()
+                ));
     }
 
     private String getKeyForRouteIdDirectionId(org.hejnaluk.metrotimetable.service.ParseTimetableService.RouteLine routeLine) {
@@ -389,6 +426,18 @@ public class ParseTimetableService {
         return stopTimes;
     }
 
+    /**
+     * Returns the stop ID for the platform on the opposite track.
+     * <p>
+     * Prague metro stop IDs encode the platform direction in the second-to-last character:
+     * {@code '1'} and {@code '2'} are opposing platforms of the same physical station.
+     * This method swaps {@code '1'} ↔ {@code '2'} to find the counterpart stop when
+     * a stop ID from {@code stop_times.txt} is not present in {@code stops.txt}.
+     *
+     * @param stopId the original stop ID, may be {@code null} or shorter than 2 characters
+     * @return the stop ID with the second-to-last character toggled between {@code '1'} and {@code '2'},
+     *         or the original value unchanged if it does not match this pattern
+     */
     private String findOppositeStopId(String stopId) {
         if (stopId == null || stopId.length() < 2) {
             log.warn("Cannot find opposite stop ID for invalid stopId: {}", stopId);
