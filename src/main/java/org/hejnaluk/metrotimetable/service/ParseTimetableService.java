@@ -239,7 +239,9 @@ public class ParseTimetableService {
 
             for (List<CompleteStop> stops : entry.getValue().values()) {
                 for (int i = 0; i < stops.size(); i++) {
-                    if (stops.get(i).stopName().equalsIgnoreCase(stationName)) {
+                    String stopName = stops.get(i).stopName;
+                    log.info("Tested station: {}, Searched station: {}", stopName, stationName);
+                    if (stopName.equalsIgnoreCase(stationName)) {
                         LocalTime departureTime = stops.get(i).departureTime();
                         if (!departureTime.isBefore(now)) {
                             String destination = stops.getLast().stopName();
@@ -510,7 +512,7 @@ public class ParseTimetableService {
                     .map(line -> line.split(DELIMITER))
                     .map(line -> Stop.builder()
                             .stopId(line[STOPS_STOP_ID])
-                            .stopName(line[STOPS_STOP_NAME])
+                            .stopName(line[STOPS_STOP_NAME].replace("\"", ""))
                             .build())
                     .collect(Collectors.toMap(Stop::stopId, s -> s));
         } catch (IOException e) {
