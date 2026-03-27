@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +14,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -70,6 +76,9 @@ public class ParseTimetableService {
      */
     @Value("${pid.client.routes.ids:}")
     public final Set<String> routeIds;
+
+    @Value("${pid.client.station.max-limit:15}")
+    private int maxLimit;
 
     /**
      * route_id,direction_id,stop_id,stop_sequence
@@ -209,6 +218,55 @@ public class ParseTimetableService {
             log.debug("End Key: {} value: {}", key, value);
         }
         log.info("------------------------ VERIFY DONE ------------------------");
+    }
+
+    protected LocalTime getNow() {
+        return LocalTime.now();
+    }
+
+    public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit) {
+        Timer timer = Timer.builder("station.query")
+                .description("Time taken to query trains for a station")
+                .register(meterRegistry);
+        Timer.Sample sample = Timer.start();
+
+        List<TrainDeparture> result = new ArrayList<>();
+        LocalTime now = getNow();
+
+        for (Map.Entry<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> entry : routeIdDirectionCache.entrySet()) {
+            String key = entry.getKey();
+            if (direction != null && !key.endsWith("-" + direction)) {
+                continue;
+            }
+            int lastDash = key.lastIndexOf('-');
+            String routeId = key.substring(0, lastDash);
+            int directionId = Integer.parseInt(key.substring(lastDash + 1));
+
+            for (List<CompleteStop> stops : entry.getValue().values()) {
+                for (int i = 0; i < stops.size(); i++) {
+                    if (stops.get(i).stopName().equalsIgnoreCase(stationName)) {
+                        LocalTime departureTime = stops.get(i).departureTime();
+                        if (!departureTime.isBefore(now)) {
+                            String destination = stops.getLast().stopName();
+                            List<String> upcomingStations = stops.subList(i, stops.size()).stream()
+                                    .map(CompleteStop::stopName)
+                                    .toList();
+                            result.add(new TrainDeparture(routeId, directionId, departureTime, destination, upcomingStations));
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        int effectiveLimit = Math.min(limit, maxLimit);
+        List<TrainDeparture> finalResult = result.stream()
+                .sorted(Comparator.comparing(TrainDeparture::departureTime))
+                .limit(effectiveLimit)
+                .toList();
+
+        sample.stop(timer);
+        return finalResult;
     }
 
     private String getKeyForRouteIdDirectionId(org.hejnaluk.metrotimetable.service.ParseTimetableService.RouteLine routeLine) {
