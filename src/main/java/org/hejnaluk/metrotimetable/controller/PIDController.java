@@ -34,9 +34,10 @@ public class PIDController {
     public ResponseEntity<List<TrainDeparture>> getTrainsForStation(
             @RequestParam String station,
             @RequestParam(required = false) Integer direction,
-            @RequestParam(defaultValue = "5") int limit) {
-        log.info("GET /pid/station - station={}, direction={}, limit={}", station, direction, limit);
-        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(station, direction, limit));
+            @RequestParam(defaultValue = "5") Integer limit) {
+        int effectiveLimit = limit != null ? limit : 5;
+        log.info("GET /pid/station - station={}, direction={}, limit={}", station, direction, effectiveLimit);
+        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(station, direction, effectiveLimit));
     }
 
 }
