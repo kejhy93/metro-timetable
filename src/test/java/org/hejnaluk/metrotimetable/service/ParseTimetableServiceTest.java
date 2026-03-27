@@ -5,13 +5,11 @@ import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.Field;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,11 +29,11 @@ class ParseTimetableServiceTest {
             }
         };
         setMaxLimit(service, 15);
-        clearCache();
+        ParseTimetableService.resetForTest();
     }
 
     @Test
-    void returnsUpcomingTrainsForStation() throws Exception {
+    void returnsUpcomingTrainsForStation() {
         // first trip: Muzeum departure at 10:01 (before FIXED_NOW 12:00) → filtered out
         // second trip: Muzeum departure at 13:01 (after FIXED_NOW 12:00) → included
         populateCache("L991-0", Map.of(
@@ -57,7 +55,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void returnsEmptyList_whenStationNotFound() throws Exception {
+    void returnsEmptyList_whenStationNotFound() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Náměstí Míru", "Zličín")
         ));
@@ -68,7 +66,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void isCaseInsensitive() throws Exception {
+    void isCaseInsensitive() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
         ));
@@ -78,7 +76,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void filtersByDirection() throws Exception {
+    void filtersByDirection() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
         ));
@@ -93,7 +91,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void respectsLimit() throws Exception {
+    void respectsLimit() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
                 LocalTime.of(14, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
@@ -107,7 +105,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void defaultLimit_returnsFive() throws Exception {
+    void defaultLimit_returnsFive() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín"),
                 LocalTime.of(13, 10), stops("Depo Hostivař", "Muzeum", "Zličín"),
@@ -123,8 +121,8 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void limitCappedAtMaximum() throws Exception {
-        var cacheEntries = new ConcurrentHashMap<LocalTime, List<ParseTimetableService.CompleteStop>>();
+    void limitCappedAtMaximum() {
+        var cacheEntries = new java.util.HashMap<LocalTime, List<ParseTimetableService.CompleteStop>>();
         for (int i = 0; i < 20; i++) {
             cacheEntries.put(LocalTime.of(13, i), stops("Depo Hostivař", "Muzeum", "Zličín"));
         }
@@ -136,7 +134,7 @@ class ParseTimetableServiceTest {
     }
 
     @Test
-    void upcomingStations_correctOrder() throws Exception {
+    void upcomingStations_correctOrder() {
         populateCache("L991-0", Map.of(
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Skalka", "Muzeum", "Dejvická", "Zličín")
         ));
@@ -156,7 +154,8 @@ class ParseTimetableServiceTest {
         List<ParseTimetableService.CompleteStop> list = new ArrayList<>();
         for (int i = 0; i < names.length; i++) {
             LocalTime t = baseTime.plusMinutes(i);
-            list.add(new ParseTimetableService.CompleteStop("stop-" + i, names[i], t, t));
+            list.add(new ParseTimetableService.CompleteStop(
+                    ParseTimetableService.Stop.builder().stopId("stop-" + i).stopName(names[i]).build(), t, t));
         }
         return list;
     }
@@ -166,24 +165,12 @@ class ParseTimetableServiceTest {
         return stopsAt(LocalTime.of(13, 0), names);
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, ConcurrentSkipListMap<LocalTime, List<ParseTimetableService.CompleteStop>>> getCache() throws Exception {
-        Field field = ParseTimetableService.class.getDeclaredField("routeIdDirectionCache");
-        field.setAccessible(true);
-        return (Map<String, ConcurrentSkipListMap<LocalTime, List<ParseTimetableService.CompleteStop>>>) field.get(null);
-    }
-
-    private static void clearCache() throws Exception {
-        getCache().clear();
-    }
-
-    private static void populateCache(String key, Map<LocalTime, List<ParseTimetableService.CompleteStop>> trips) throws Exception {
-        ConcurrentSkipListMap<LocalTime, List<ParseTimetableService.CompleteStop>> tripMap = new ConcurrentSkipListMap<>(trips);
-        getCache().put(key, tripMap);
+    private static void populateCache(String key, Map<LocalTime, List<ParseTimetableService.CompleteStop>> trips) {
+        ParseTimetableService.populateForTest(key, new ConcurrentSkipListMap<>(trips));
     }
 
     private static void setMaxLimit(ParseTimetableService svc, int value) throws Exception {
-        Field field = ParseTimetableService.class.getDeclaredField("maxLimit");
+        java.lang.reflect.Field field = ParseTimetableService.class.getDeclaredField("maxLimit");
         field.setAccessible(true);
         field.set(svc, value);
     }
