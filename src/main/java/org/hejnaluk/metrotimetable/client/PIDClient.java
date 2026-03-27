@@ -198,6 +198,11 @@ public class PIDClient {
         }
         log.info("Collected {} trip IDs for routes {}", relevantTripIds.size(), routeIds);
 
+        if (relevantTripIds.isEmpty()) {
+            log.warn("No trips found for configured routes {}. Skipping stop_times.txt filtering; file will remain unchanged.", routeIds);
+            return;
+        }
+
         // Step 2: stream stop_times.txt into a temp file, keeping header + matching rows.
         try (BufferedReader reader = Files.newBufferedReader(stopTimesPath);
              BufferedWriter writer = Files.newBufferedWriter(tempPath)) {
