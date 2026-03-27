@@ -23,6 +23,11 @@ public class PIDController {
     private final TimetableRefreshService timetableRefreshService;
     private final ParseTimetableService parseTimetableService;
 
+    /**
+     * Triggers a full timetable download-and-parse cycle.
+     *
+     * @return {@code 200 OK} with no body once the refresh completes
+     */
     @GetMapping
     public ResponseEntity<Void> getTimetableChange() {
         log.info("GET /pid - timetable refresh requested");
@@ -30,6 +35,14 @@ public class PIDController {
         return ResponseEntity.ok().build();
     }
 
+    /**
+     * Returns upcoming train departures for a given station.
+     *
+     * @param station   the station name to query (case-insensitive)
+     * @param direction optional direction filter ({@code 0} or {@code 1}); omit to return both directions
+     * @param limit     maximum number of results to return (default {@code 5}, capped by server-side max)
+     * @return {@code 200 OK} with the list of upcoming {@link TrainDeparture}s, sorted by departure time
+     */
     @GetMapping("/station")
     public ResponseEntity<List<TrainDeparture>> getTrainsForStation(
             @RequestParam String station,
