@@ -14,10 +14,12 @@ import java.nio.file.Path;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 
+import static java.nio.file.Files.lines;
 import static org.hejnaluk.metrotimetable.client.PIDClient.ROOT_PATH_FILE;
 
 @Service
@@ -130,22 +132,36 @@ public class ParseTimetableService {
                 .description("Time taken to parse files")
                 .register(meterRegistry);
         io.micrometer.core.instrument.Timer.Sample fileParseTimeSample = Timer.start();
-        final var routesList = parseRoutes();
-        final var routeStopsList = parseRouteStops();
-        final var stopsList = parseStops();
-        final var stopTimesList = parseStopTime();
-        final var tripList = parseTrip(routeIds);
+
+        // Parse independent files in parallel
+        final var routesFuture    = CompletableFuture.supplyAsync(this::parseRoutes);
+        final var routeStopsFuture = CompletableFuture.supplyAsync(this::parseRouteStops);
+        final var stopsFuture     = CompletableFuture.supplyAsync(this::parseStops);
+        final var tripFuture      = CompletableFuture.supplyAsync(() -> parseTrip(routeIds));
+        CompletableFuture.allOf(routesFuture, routeStopsFuture, stopsFuture, tripFuture).join();
+
+        final var routesList    = routesFuture.join();
+        final var routeStopsList = routeStopsFuture.join();
+        final var stopsMap      = stopsFuture.join();
+        final var tripList      = tripFuture.join();
+
+        // Filter stop times to only trips we care about
+        final var relevantTripIds = tripList.stream().map(Trip::tripId).collect(Collectors.toSet());
+        final var stopTimesList   = parseStopTime(relevantTripIds);
+        final var stopTimesByTripId = stopTimesList.stream()
+                .collect(Collectors.groupingBy(st -> st.tripId));
+
         fileParseTimeSample.stop(fileParseTimer);
 
         log.debug("Routes: {}", routesList.stream().map(Route::toString).collect(Collectors.joining(", ", "[ ", " ]")));
         log.debug("Routes stops: {}", routeStopsList.stream().map(RouteStop::toString).collect(Collectors.joining(", ", "[", " ]")));
-        log.debug("Stops: {}", stopsList.stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
+        log.debug("Stops: {}", stopsMap.values().stream().map(Stop::toString).collect(Collectors.joining(", ", "[", " ]")));
 
         io.micrometer.core.instrument.Timer logicBuildTimer = io.micrometer.core.instrument.Timer.builder("create.releationship")
                 .description("Time taken to create relationships")
                 .register(meterRegistry);
         io.micrometer.core.instrument.Timer.Sample logicBuildTimeSample = Timer.start();
-        final var routesLines = calculateRouteLine(routeStopsList, stopsList, tripList, stopTimesList);
+        final var routesLines = calculateRouteLine(routeStopsList, stopsMap, tripList, stopTimesByTripId);
         logicBuildTimeSample.stop(logicBuildTimer);
         log.info("----------------------- PARSING DONE ------------------------");
 
@@ -220,20 +236,20 @@ public class ParseTimetableService {
      * <p>
      * The resulting list of RouteLine objects represents the routes and their associated stops and stop times.
      *
-     * @param routeStopsList The list of all route stops.
-     * @param stopsList      The list of all stops.
-     * @param tripList       The list of all trips.
-     * @param stopTimeList   The list of all stop times.
+     * @param routeStopsList    The list of all route stops.
+     * @param stopsMap          All stops keyed by stopId for O(1) lookup.
+     * @param tripList          The list of all trips.
+     * @param stopTimesByTripId All stop times grouped by tripId for O(1) lookup.
      * @return A list of RouteLine objects, each representing a route and its associated stops and stop times.
      */
-    private List<RouteLine> calculateRouteLine(List<RouteStop> routeStopsList, List<Stop> stopsList, List<Trip> tripList, List<StopTime> stopTimeList) {
+    private List<RouteLine> calculateRouteLine(List<RouteStop> routeStopsList, Map<String, Stop> stopsMap, List<Trip> tripList, Map<String, List<StopTime>> stopTimesByTripId) {
         final var routeLinesList = new ArrayList<RouteLine>();
         for (final var trip : tripList) {
             final var routeId = trip.routeId();
             final var directionId = trip.directionId();
             log.debug("Calculate route line for routeId: {}, directionId: {}", routeId, directionId);
-            final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsList, directionId);
-            final var stopTimes = calculateRouteLineStop(stopsList, stopTimeList, trip);
+            final var stopList = calculateStopForGivenRouteAndDirections(routeId, routeStopsList, stopsMap, directionId);
+            final var stopTimes = calculateRouteLineStop(stopsMap, stopTimesByTripId, trip);
             final var routeLine = RouteLine.builder()
                     .routeId(routeId)
                     .directionId(directionId)
@@ -248,26 +264,22 @@ public class ParseTimetableService {
     }
 
     /**
-     * Calculates the list of RouteLineStop objects for a given route and direction.
+     * Builds the list of RouteLineStop objects for a single trip by joining its stop times with stop details.
      * <p>
-     * This method checks if the result is already cached. If not, it processes the stop times
-     * and matches them with the corresponding stops to create RouteLineStop objects.
-     * The result is then cached for future use.
+     * Stop times are retrieved in O(1) via {@code stopTimesByTripId} and each stop is resolved in O(1)
+     * via {@code stopsMap}, avoiding any linear scans.
      *
-     * @param stopsList    The list of all stops.
-     * @param stopTimeList The list of all stop times.
-     * @param trip         The trip object containing route and direction information.
-     * @return A list of RouteLineStop objects for the given route and direction.
+     * @param stopsMap          All stops keyed by stopId for O(1) lookup.
+     * @param stopTimesByTripId All stop times grouped by tripId for O(1) lookup.
+     * @param trip              The trip whose stops are to be resolved.
+     * @return A list of RouteLineStop objects for the given trip.
      */
-    private List<RouteLineStop> calculateRouteLineStop(List<Stop> stopsList, List<StopTime> stopTimeList, Trip trip) {
-        final var stopTimes = stopTimeList.stream()
-                .filter(stopTime -> trip.tripId.equals(stopTime.tripId))
+    private List<RouteLineStop> calculateRouteLineStop(Map<String, Stop> stopsMap, Map<String, List<StopTime>> stopTimesByTripId, Trip trip) {
+        final var stopTimes = stopTimesByTripId.getOrDefault(trip.tripId, List.of()).stream()
                 .map(stopTime -> {
                     final var stopId = stopTime.stopId;
-                    final var stop = stopsList.stream()
-                            .filter(s -> stopId.equals(s.stopId))
-                            .findAny()
-                            .orElseThrow(() -> new IllegalArgumentException("Stop not found: " + stopId));
+                    final var stop = stopsMap.get(stopId);
+                    if (stop == null) throw new IllegalArgumentException("Stop not found: " + stopId);
                     return RouteLineStop.builder()
                             .stop(stop)
                             .stopTime(stopTime)
@@ -282,14 +294,17 @@ public class ParseTimetableService {
 
     /**
      * Calculates the list of stops for a given route and direction.
+     * <p>
+     * Results are cached in {@code cacheListStopByRouteIdAndDirectionId} by a {@code "routeId-directionId"} key.
+     * Each stop is resolved in O(1) via {@code stopsMap}.
      *
      * @param routeId        The ID of the route for which stops are to be calculated.
      * @param routeStopsList The list of all route stops.
-     * @param stopsList      The list of all stops.
+     * @param stopsMap       All stops keyed by stopId for O(1) lookup.
      * @param direction      The direction ID (e.g., "0" or "1") for which stops are to be calculated.
      * @return A list of stops corresponding to the given route and direction.
      */
-    private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, List<Stop> stopsList, String direction) {
+    private List<Stop> calculateStopForGivenRouteAndDirections(String routeId, List<RouteStop> routeStopsList, Map<String, Stop> stopsMap, String direction) {
         final var key = getKeyForStopsMap(routeId, direction);
 
         if (cacheListStopByRouteIdAndDirectionId.containsKey(key)) {
@@ -301,13 +316,9 @@ public class ParseTimetableService {
                 .filter(routeStop -> routeId.equals(routeStop.routeId))
                 // filter only route stops for the given direction
                 .filter(routeStop -> direction.equals(routeStop.directionId))
-                // find corresponding stop in the stops list
-                .map(routeStop -> {
-                    final var stopId = routeStop.stopId;
-                    return stopsList.stream().filter(stop -> stopId.equals(stop.stopId)).findAny();
-                })
-                .filter(Optional::isPresent)
-                .map(Optional::get)
+                // find corresponding stop in the stops map
+                .map(routeStop -> stopsMap.get(routeStop.stopId))
+                .filter(Objects::nonNull)
                 .toList();
 
         log.info("New value for key: {} in cacheListStopByRouteIdAndDirectionId", key);
@@ -357,25 +368,29 @@ public class ParseTimetableService {
     }
 
     /**
-     * Parses the `stop_times.txt` file and returns a list of StopTime objects.
+     * Parses the `stop_times.txt` file and returns only the StopTime objects whose trip ID is in {@code tripIds}.
      * <p>
      * The file is expected to have the following format:
      * trip_id,arrival_time,departure_time,stop_id,stop_sequence,stop_headsign,pickup_type,drop_off_type,shape_dist_traveled,trip_operation_type,bikes_allowed
      * <p>
-     * Each line is split using the specified delimiter, and the resulting data is mapped
-     * to a StopTime object using the builder pattern.
+     * The file is read lazily via {@link Files#lines} to avoid loading the entire file into memory at once.
+     * Rows whose trip ID is not in {@code tripIds} are discarded before any object allocation occurs.
      * <p>
-     * If an error occurs while reading the file, an empty list is returned, and an error
-     * message is logged.
+     * If an error occurs while reading the file, an empty list is returned, and an error message is logged.
      *
-     * @return A list of StopTime objects parsed from the `stop_times.txt` file.
+     * @param tripIds The set of trip IDs to retain; all other rows are skipped.
+     * @return A list of StopTime objects for the requested trips.
      */
-    private List<StopTime> parseStopTime() {
+    private List<StopTime> parseStopTime(Set<String> tripIds) {
+        if (tripIds.isEmpty()) {
+            return List.of();
+        }
         try {
             return Files.readString(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))
                     .lines()
                     .skip(1) // skip first line because it is column description
                     .map(line -> line.split(DELIMITER))
+                    .filter(line -> tripIds.contains(line[STOP_TIME_TRIP_ID]))
                     .map(line -> {
                         final var arrivalTime = reformatHoursFormat(line, STOP_TIME_ARRIVAL_TIME);
                         final var departureTime = reformatHoursFormat(line, STOP_TIME_DEPARTURE_TIME);
@@ -388,7 +403,7 @@ public class ParseTimetableService {
                     })
                     .toList();
         } catch (IOException e) {
-            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOP_TIME_FILE_NAME, e);
             return List.of();
         }
     }
@@ -424,20 +439,18 @@ public class ParseTimetableService {
     }
 
     /**
-     * Parses the `stops.txt` file and returns a list of Stop objects.
+     * Parses the `stops.txt` file and returns all stops indexed by their stop ID.
      * <p>
      * The file is expected to have the following format:
      * stop_id,stop_name,stop_lat,stop_lon,zone_id,stop_url,location_type,parent_station,wheelchair_boarding,level_id,platform_code,asw_node_id,asw_stop_id,zone_region_type
      * <p>
-     * Each line is split using the specified delimiter, and the resulting data is mapped
-     * to a Stop object using the builder pattern.
+     * Returning a {@code Map} instead of a list allows O(1) stop resolution by ID in downstream methods.
      * <p>
-     * If an error occurs while reading the file, an empty list is returned, and an error
-     * message is logged.
+     * If an error occurs while reading the file, an empty map is returned, and an error message is logged.
      *
-     * @return A list of Stop objects parsed from the `stops.txt` file.
+     * @return All parsed stops keyed by stopId.
      */
-    private List<Stop> parseStops() {
+    private Map<String, Stop> parseStops() {
         try {
             return Files.readString(Path.of(ROOT_PATH_FILE, STOPS_FILE_NAME))
                     .lines()
@@ -446,10 +459,10 @@ public class ParseTimetableService {
                             .stopId(line[STOPS_STOP_ID])
                             .stopName(line[STOPS_STOP_NAME])
                             .build())
-                    .toList();
+                    .collect(Collectors.toMap(Stop::stopId, s -> s));
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOPS_FILE_NAME, e);
-            return List.of();
+            return Map.of();
         }
     }
 
