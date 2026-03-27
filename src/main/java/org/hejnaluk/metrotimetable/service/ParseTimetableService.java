@@ -188,7 +188,7 @@ public class ParseTimetableService {
                 .description("Time taken to create relationships")
                 .register(meterRegistry);
         io.micrometer.core.instrument.Timer.Sample logicBuildTimeSample = Timer.start();
-        final var routesLines = calculateRouteLine(routeStopsList, stopsMap, tripList, stopTimesByTripId);
+        final var routesLines = calculateRouteLine(stopsMap, tripList, stopTimesByTripId);
         logicBuildTimeSample.stop(logicBuildTimer);
         log.info("----------------------- PARSING DONE ------------------------");
 
@@ -373,13 +373,12 @@ public class ParseTimetableService {
      * <p>
      * The resulting list of RouteLine objects represents the routes and their associated stops and stop times.
      *
-     * @param routeStopsList    The list of all route stops.
      * @param stopsMap          All stops keyed by stopId for O(1) lookup.
      * @param tripList          The list of all trips.
      * @param stopTimesByTripId All stop times grouped by tripId for O(1) lookup.
      * @return A list of RouteLine objects, each representing a route and its associated stops and stop times.
      */
-    private List<RouteLine> calculateRouteLine(List<RouteStop> routeStopsList, Map<String, Stop> stopsMap, List<Trip> tripList, Map<String, List<StopTime>> stopTimesByTripId) {
+    private List<RouteLine> calculateRouteLine(Map<String, Stop> stopsMap, List<Trip> tripList, Map<String, List<StopTime>> stopTimesByTripId) {
         final var routeLinesList = new ArrayList<RouteLine>();
         for (final var trip : tripList) {
             final var routeId = trip.routeId();
@@ -444,7 +443,11 @@ public class ParseTimetableService {
             return stopId;
         }
         char secondLastChar = stopId.charAt(stopId.length() - 2);
-        char newSecondLastChar = secondLastChar == '1' ? '2' : (secondLastChar == '2' ? '1' : secondLastChar);
+        char newSecondLastChar = switch (secondLastChar) {
+            case '1' -> '2';
+            case '2' -> '1';
+            default -> secondLastChar;
+        };
         return stopId.substring(0, stopId.length() - 2) + newSecondLastChar + stopId.charAt(stopId.length() - 1);
     }
 
@@ -615,37 +618,6 @@ public class ParseTimetableService {
                     .toList();
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTE_STOPS_FILE_NAME, e);
-            return List.of();
-        }
-    }
-
-    /**
-     * Parses the routes file and returns a list of Route objects.
-     * <p>
-     * The file is expected to have the following format:
-     * route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
-     * <p>
-     * Only routes with IDs present in the ROUTE_IDS set are included in the result.
-     *
-     * @return A list of Route objects parsed from the routes file.
-     * Returns an empty list if an error occurs while reading the file.
-     */
-    private List<Route> parseRoutes() {
-        try (Stream<String> lines = Files.lines(Path.of(ROOT_PATH_FILE, ROUTES_FILE_NAME))) {
-            return lines
-                    .map(line -> line.split(DELIMITER))
-                    .filter(line -> routeIds.contains(line[ROUTE_ROUTE_ID]))
-                    .map(line -> Route.builder()
-                            .routeId(line[ROUTE_ROUTE_ID])
-                            .routeShortName(line[ROUTE_ROUTE_SHORT_NAME])
-                            .routeLongName(line[ROUTE_ROUTE_LONG_NAME])
-                            .routeUrl(line[ROUTE_ROUTE_URL])
-                            .routeColor(line[ROUTE_ROUTE_COLOR])
-                            .routeTextColor(line[ROUTE_ROUTE_TEXT_COLOR])
-                            .build())
-                    .toList();
-        } catch (IOException e) {
-            log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTES_FILE_NAME, e);
             return List.of();
         }
     }

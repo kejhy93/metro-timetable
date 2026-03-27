@@ -87,7 +87,7 @@ class ParseTimetableServiceTest {
         List<TrainDeparture> result = service.getTrainsForStation("Muzeum", 0, 10);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().directionId()).isEqualTo(0);
+        assertThat(result.getFirst().directionId()).isZero();
     }
 
     @Test
