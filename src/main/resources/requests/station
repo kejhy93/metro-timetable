@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+request() {
+  local url="$1"
+  local response http_code body
+  response=$(curl -s -w "\n%{http_code}" "$url")
+  http_code=$(echo "$response" | tail -1)
+  body=$(echo "$response" | head -n -1)
+  echo "HTTP $http_code"
+  echo "$body" | jq .
+}
+
+echo "=== All directions, default limit ==="
+request "http://localhost:8080/pid/station?station=Muzeum"
+
+echo ""
+echo "=== Direction 0 only ==="
+request "http://localhost:8080/pid/station?station=Muzeum&direction=0"
+
+echo ""
+echo "=== Direction 0, limit 3 ==="
+request "http://localhost:8080/pid/station?station=Muzeum&direction=0&limit=3"
