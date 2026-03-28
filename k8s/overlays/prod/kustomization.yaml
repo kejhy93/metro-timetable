@@ -8,7 +8,7 @@ resources:
 images:
   - name: metro-timetable
     newName: ghcr.io/kejhy93/metro-timetable
-    newTag: latest
+    newTag: main
 
 patches:
   - path: deployment-patch.yaml
