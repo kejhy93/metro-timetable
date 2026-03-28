@@ -29,7 +29,7 @@ class ParseTimetableServiceTest {
             }
         };
         setMaxLimit(service, 15);
-        ParseTimetableService.resetForTest();
+        service.resetForTest();
     }
 
     @Test
@@ -186,8 +186,8 @@ class ParseTimetableServiceTest {
         return stopsAt(LocalTime.of(13, 0), names);
     }
 
-    private static void populateCache(String key, Map<LocalTime, List<ParseTimetableService.CompleteStop>> trips) {
-        ParseTimetableService.populateForTest(key, new ConcurrentSkipListMap<>(trips));
+    private void populateCache(String key, Map<LocalTime, List<ParseTimetableService.CompleteStop>> trips) {
+        service.populateForTest(key, new ConcurrentSkipListMap<>(trips));
     }
 
     private static void setMaxLimit(ParseTimetableService svc, int value) throws Exception {

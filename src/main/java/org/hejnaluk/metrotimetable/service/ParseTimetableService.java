@@ -143,7 +143,7 @@ public class ParseTimetableService {
         }
     }
 
-    private static volatile TimetableData timetableData = TimetableData.empty();
+    private volatile TimetableData timetableData = TimetableData.empty();
 
     /**
      * Downloads (if stale), parses all GTFS files, and atomically replaces the in-memory cache.
@@ -342,11 +342,11 @@ public class ParseTimetableService {
 
     // --- Package-private test support ---
 
-    static void resetForTest() {
+    void resetForTest() {
         timetableData = TimetableData.empty();
     }
 
-    static void populateForTest(String key, ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips) {
+    void populateForTest(String key, ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips) {
         final Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> routeCache =
                 new HashMap<>(timetableData.routeCache());
         routeCache.put(key, trips);
