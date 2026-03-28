@@ -9,10 +9,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - 72.62.60.217
+        - hejnaluk.dev
       secretName: metro-timetable-tls
   rules:
-    - host: 72.62.60.217
+    - host: hejnaluk.dev
       http:
         paths:
           - path: /
