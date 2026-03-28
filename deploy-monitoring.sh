@@ -7,7 +7,7 @@ ENV="prod"
 usage() {
   echo "Usage: $0 [--env local|prod]"
   echo "  --env local  Deploy to minikube; access Grafana via port-forward (default: prod)"
-  echo "  --env prod   Deploy to k3s with TLS ingress at https://grafana.hejnaluk.dev"
+  echo "  --env prod   Deploy to k3s with TLS ingress at https://hejnaluk.dev/grafana"
   exit 1
 }
 
@@ -38,7 +38,9 @@ echo "==> Installing kube-prometheus-stack..."
 helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
-  --set grafana.adminPassword=admin
+  --set grafana.adminPassword=admin \
+  --set "grafana.grafana\.ini.server.root_url=https://hejnaluk.dev/grafana" \
+  --set "grafana.grafana\.ini.server.serve_from_sub_path=true"
 
 echo "==> Applying ServiceMonitor..."
 kubectl apply -f "$K8S_DIR/base/servicemonitor.yaml"
@@ -57,7 +59,7 @@ echo ""
 echo "==> Done. Access the UIs with:"
 echo "    Prometheus: kubectl port-forward -n monitoring svc/prometheus-operated 9090:9090"
 if [[ "$ENV" == "prod" ]]; then
-  echo "    Grafana:    https://grafana.hejnaluk.dev"
+  echo "    Grafana:    https://hejnaluk.dev/grafana"
 else
   echo "    Grafana:    ./port-forward-grafana.sh  (then open http://localhost:3000)"
 fi
