@@ -2,9 +2,29 @@
 set -euo pipefail
 
 K8S_DIR="$(dirname "$0")/k8s"
+ENV="prod"
+
+usage() {
+  echo "Usage: $0 [--env local|prod]"
+  echo "  --env local  Deploy to minikube; access Grafana via port-forward (default: prod)"
+  echo "  --env prod   Deploy to k3s with TLS ingress at https://grafana.hejnaluk.dev"
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --env) ENV="$2"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+case "$ENV" in
+  local|prod) ;;
+  *) echo "Unknown environment: $ENV"; usage ;;
+esac
 
 # k3s stores its kubeconfig outside the default location
-if [[ -f /etc/rancher/k3s/k3s.yaml && -z "${KUBECONFIG:-}" ]]; then
+if [[ "$ENV" == "prod" && -f /etc/rancher/k3s/k3s.yaml && -z "${KUBECONFIG:-}" ]]; then
   export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 fi
 
@@ -28,8 +48,17 @@ kubectl --namespace monitoring wait --for=condition=ready pod \
   -l "release=prometheus" \
   --timeout=120s
 
+if [[ "$ENV" == "prod" ]]; then
+  echo "==> Applying Grafana Ingress..."
+  kubectl apply -f "$K8S_DIR/monitoring/grafana-ingress.yaml"
+fi
+
 echo ""
 echo "==> Done. Access the UIs with:"
 echo "    Prometheus: kubectl port-forward -n monitoring svc/prometheus-operated 9090:9090"
-echo "    Grafana:    kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+if [[ "$ENV" == "prod" ]]; then
+  echo "    Grafana:    https://grafana.hejnaluk.dev"
+else
+  echo "    Grafana:    ./port-forward-grafana.sh  (then open http://localhost:3000)"
+fi
 echo "    Grafana login: admin / admin"
