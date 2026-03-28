@@ -9,11 +9,13 @@ if [[ -f /etc/rancher/k3s/k3s.yaml && -z "${KUBECONFIG:-}" ]]; then
 fi
 
 echo "==> Adding prometheus-community helm repo..."
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+if ! helm repo list | grep -q "^prometheus-community\b"; then
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+fi
 helm repo update
 
 echo "==> Installing kube-prometheus-stack..."
-helm install prometheus prometheus-community/kube-prometheus-stack \
+helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --create-namespace \
   --set grafana.adminPassword=admin
