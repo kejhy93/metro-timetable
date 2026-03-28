@@ -1,0 +1,14 @@
+namespace: metro-test
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+images:
+  - name: metro-timetable
+    newName: ghcr.io/kejhy93/metro-timetable
+    newTag: main
+
+patches:
+  - path: deployment-patch.yaml
+  - path: service-patch.yaml
