@@ -130,7 +130,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "expr": "jvm_memory_used_bytes{area=\"heap\", namespace=\"$namespace\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "Used - {{id}}",
@@ -145,7 +145,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "jvm_memory_committed_bytes{area=\"heap\"}",
+          "expr": "jvm_memory_committed_bytes{area=\"heap\", namespace=\"$namespace\"}",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
@@ -161,7 +161,7 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "expr": "jvm_memory_max_bytes{area=\"heap\", namespace=\"$namespace\"}",
           "fullMetaSearch": false,
           "hide": true,
           "includeNullMetadata": true,
@@ -226,7 +226,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "process_uptime_seconds",
+          "expr": "process_uptime_seconds{namespace=\"$namespace\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "__auto",
@@ -336,7 +336,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(create_cache_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(create_cache_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "Create Cache",
@@ -350,7 +350,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(file_parse_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(file_parse_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "File parse",
           "range": true,
@@ -362,7 +362,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(create_releationship_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(create_releationship_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "Create relationship",
           "range": true,
@@ -457,7 +457,7 @@
         {
           "disableTextWrap": false,
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(create_cache_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(create_cache_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
           "legendFormat": "Create Cache",
@@ -471,7 +471,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(file_parse_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(file_parse_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "File parse",
           "range": true,
@@ -483,7 +483,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(create_releationship_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(create_releationship_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "hide": false,
           "legendFormat": "Create relationship",
           "range": true,
@@ -577,7 +577,7 @@
       "targets": [
         {
           "editorMode": "code",
-          "expr": "(rate(create_cache_seconds_max[$__rate_interval]))\n/\n(rate(create_cache_seconds_count[$__rate_interval]))",
+          "expr": "(rate(create_cache_seconds_max{namespace=\"$namespace\"}[$__rate_interval]))\n/\n(rate(create_cache_seconds_count{namespace=\"$namespace\"}[$__rate_interval]))",
           "legendFormat": "Create Cache",
           "range": true,
           "refId": "CreateCache"
@@ -588,7 +588,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(rate(file_parse_seconds_max[$__rate_interval]))\n/\n(rate(file_parse_seconds_count[$__rate_interval]))",
+          "expr": "(rate(file_parse_seconds_max{namespace=\"$namespace\"}[$__rate_interval]))\n/\n(rate(file_parse_seconds_count{namespace=\"$namespace\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "File parse",
           "range": true,
@@ -600,7 +600,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "(rate(create_releationship_seconds_max[$__rate_interval]))\n/\n(rate(create_releationship_seconds_count[$__rate_interval]))",
+          "expr": "(rate(create_releationship_seconds_max{namespace=\"$namespace\"}[$__rate_interval]))\n/\n(rate(create_releationship_seconds_count{namespace=\"$namespace\"}[$__rate_interval]))",
           "hide": false,
           "legendFormat": "Create relationship",
           "range": true,
@@ -711,7 +711,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.50, sum by(le) (rate(station_query_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.50, sum by(le) (rate(station_query_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "p50"
@@ -722,7 +722,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.95, sum by(le) (rate(station_query_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by(le) (rate(station_query_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p95",
           "range": true,
           "refId": "p95"
@@ -733,7 +733,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, sum by(le) (rate(station_query_seconds_bucket[$__rate_interval])))",
+          "expr": "histogram_quantile(0.99, sum by(le) (rate(station_query_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))",
           "legendFormat": "p99",
           "range": true,
           "refId": "p99"
@@ -842,7 +842,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "code",
-              "expr": "rate(http_server_requests_seconds_count[$__rate_interval])",
+              "expr": "rate(http_server_requests_seconds_count{namespace=\"$namespace\"}[$__rate_interval])",
               "fullMetaSearch": false,
               "hide": false,
               "includeNullMetadata": false,
@@ -948,7 +948,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "code",
-              "expr": "(rate(http_server_requests_seconds_sum[$__rate_interval]))\n/\n(rate(http_server_requests_seconds_count[$__rate_interval]))",
+              "expr": "(rate(http_server_requests_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]))\n/\n(rate(http_server_requests_seconds_count{namespace=\"$namespace\"}[$__rate_interval]))",
               "fullMetaSearch": false,
               "hide": false,
               "includeNullMetadata": false,
@@ -1070,7 +1070,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "builder",
-              "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+              "expr": "jvm_memory_used_bytes{area=\"heap\", namespace=\"$namespace\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "legendFormat": "{{id}}",
@@ -1177,7 +1177,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "builder",
-              "expr": "jvm_memory_committed_bytes{area=\"heap\"}",
+              "expr": "jvm_memory_committed_bytes{area=\"heap\", namespace=\"$namespace\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "legendFormat": "{{id}}",
@@ -1284,7 +1284,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "builder",
-              "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+              "expr": "jvm_memory_max_bytes{area=\"heap\", namespace=\"$namespace\"}",
               "fullMetaSearch": false,
               "includeNullMetadata": true,
               "legendFormat": "{{id}}",
@@ -1323,6 +1323,32 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "metro-prod",
+          "value": "metro-prod"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "definition": "label_values(jvm_memory_used_bytes, namespace)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Namespace",
+        "multi": false,
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "query": "label_values(jvm_memory_used_bytes, namespace)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
       }
     ]
   },
