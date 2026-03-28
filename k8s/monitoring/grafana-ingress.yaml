@@ -10,13 +10,13 @@ metadata:
 spec:
   tls:
     - hosts:
-        - grafana.hejnaluk.dev
-      secretName: grafana-tls
+        - hejnaluk.dev
+      secretName: hejnaluk-dev-tls
   rules:
-    - host: grafana.hejnaluk.dev
+    - host: hejnaluk.dev
       http:
         paths:
-          - path: /
+          - path: /grafana
             pathType: Prefix
             backend:
               service:
