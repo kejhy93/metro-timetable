@@ -22,34 +22,52 @@ case "$ENV" in
 esac
 
 request() {
-  local url="$1"
-  local response http_code body curl_exit
-  response=$(curl -s --max-time 5 -w "\n%{http_code}" "$url")
+  local body="$1"
+  local response http_code resp_body curl_exit
+  response=$(curl -s --max-time 5 -w "\n%{http_code}" -X POST "$BASE_URL/pid/station" \
+    -H "Content-Type: application/json" \
+    -d "$body")
   curl_exit=$?
   if [[ $curl_exit -eq 28 ]]; then
     echo "ERROR: Request timed out after 5s"
     return
   fi
   http_code=$(echo "$response" | tail -1)
-  body=$(echo "$response" | head -n -1)
+  resp_body=$(echo "$response" | head -n -1)
   echo "HTTP $http_code"
-  echo "$body" | jq .
+  echo "$resp_body" | jq .
 }
 
-echo "Looping every ${INTERVAL}s against $BASE_URL. Press Ctrl+C to stop."
+STATIONS=("Muzeum" "Můstek" "Florenc" "Náměstí Republiky" "Hlavní nádraží" "Dejvická" "Hradčanská" "Malostranská" "Staroměstská" "Nusle" "I. P. Pavlova" "Vyšehrad")
+DIRECTIONS=(0 1 "")
+LIMITS=(2 3 5 10 "")
+
+random_element() {
+  local arr=("$@")
+  echo "${arr[$((RANDOM % ${#arr[@]}))]}"
+}
+
+build_body() {
+  local station direction limit body
+  station=$(random_element "${STATIONS[@]}")
+  direction=$(random_element "${DIRECTIONS[@]}")
+  limit=$(random_element "${LIMITS[@]}")
+
+  body="{\"station\": \"${station}\""
+  [[ -n "$direction" ]] && body+=", \"direction\": ${direction}"
+  [[ -n "$limit" ]]     && body+=", \"limit\": ${limit}"
+  body+="}"
+
+  echo "$body"
+}
+
+echo "Looping every ${INTERVAL}s against $BASE_URL (random params). Press Ctrl+C to stop."
 echo ""
 
 while true; do
-  echo "=== $(date '+%H:%M:%S') All directions, default limit ==="
-  request "$BASE_URL/pid/station?station=Muzeum"
-
-  echo ""
-  echo "=== $(date '+%H:%M:%S') Direction 0 only ==="
-  request "$BASE_URL/pid/station?station=Muzeum&direction=0"
-
-  echo ""
-  echo "=== $(date '+%H:%M:%S') Direction 0, limit 3 ==="
-  request "$BASE_URL/pid/station?station=Muzeum&direction=0&limit=3"
+  body=$(build_body)
+  echo "=== $(date '+%H:%M:%S') POST /pid/station $body ==="
+  request "$body"
 
   echo ""
   echo "---"
