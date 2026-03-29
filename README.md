@@ -38,12 +38,60 @@ This repository contains a Java-based application that provides metro timetable 
 3. Use the search feature to find specific schedules.
 4. Update timetable data as needed.
 
+## Monitoring
+
+The application exposes Prometheus metrics via Spring Boot Actuator at `/actuator/prometheus`. A `ServiceMonitor` resource (in `k8s/base/servicemonitor.yaml`) tells the Prometheus Operator to scrape that endpoint every 30 seconds.
+
+### Metrics
+
+| Metric | Type | Description |
+|---|---|---|
+| `file_parse_seconds` | Timer | Time to parse GTFS text files |
+| `create_releationship_seconds` | Timer | Time to build route→stop relationships |
+| `create_cache_seconds` | Timer | Time to populate in-memory caches |
+| `station_query_seconds` | Timer | Latency of `/pid/station` queries |
+| `http_server_requests_seconds` | Timer | Standard Spring MVC request metrics |
+| `jvm_memory_*_bytes` | Gauge | JVM heap and non-heap memory |
+| `jvm_gc_pause_seconds` | Timer | GC pause rate and duration by action/cause |
+| `jvm_threads_live_threads` | Gauge | Live thread count |
+| `jvm_classes_loaded_classes` | Gauge | Loaded class count |
+| `process_cpu_usage` / `system_cpu_usage` | Gauge | CPU utilisation |
+
+### Grafana Dashboard
+
+The dashboard JSON is at `grafana-dashboard/grafana.json`. Import it via **Dashboards → Import** in Grafana. It is parameterised by `namespace` (auto-populated from `jvm_memory_used_bytes` labels) so it works across `metro-dev`, `metro-test`, and `metro-prod`.
+
+**Rows:**
+- **Parse timetable** — p95/p99 and average parse durations
+- **Station query** — p50/p95/p99 latency for station lookups
+- **HTTP** — request rate and average response time
+- **JVM Heap Memory Detailed** — used, committed, and max heap per memory pool
+- **JVM Runtime** — GC pause rate, GC avg pause duration, non-heap/metaspace, CPU usage, live threads, loaded classes
+
+### Local access
+
+To open Grafana against a local minikube cluster:
+
+```bash
+./port-forward-grafana.sh        # serves on http://localhost:3000
+./port-forward-grafana.sh 8080   # custom port
+```
+
+Login: `admin` / `admin`.
+
+In production Grafana is exposed at `https://hejnaluk.dev/grafana` via a TLS ingress (`k8s/monitoring/grafana-ingress.yaml`).
+
+### Prometheus stack setup
+
+The monitoring stack (Prometheus Operator + Grafana) is expected to be installed in the `monitoring` namespace via the `kube-prometheus-stack` Helm chart. The `ServiceMonitor` carries the label `release: prometheus` so it is picked up by the operator automatically.
+
 ## Technologies Used
 
 - **Java**: The core programming language used for this project.
 - **Spring Boot**: Framework for building the application.
 - **Maven**: Dependency management and build tool.
 - **JUnit**: Testing framework for unit tests.
+- **Prometheus + Grafana**: Metrics collection and dashboards.
 - **SonarCloud**: Code quality and security analysis.
 - **CircleCI**: Continuous integration and deployment.
 
