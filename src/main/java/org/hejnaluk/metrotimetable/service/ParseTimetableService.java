@@ -165,7 +165,7 @@ public class ParseTimetableService {
         io.micrometer.core.instrument.Timer.Sample fileParseTimeSample = Timer.start();
 
         // Phase 1: Parse route stop IDs (filtered by routeIds) + trips in parallel
-        final var neededStopIdsFuture = CompletableFuture.supplyAsync(this::parseRouteStops);
+        final var neededStopIdsFuture = CompletableFuture.supplyAsync(this::parseRouteStopIds);
         final var tripFuture = CompletableFuture.supplyAsync(() -> parseTrip(routeIds));
         CompletableFuture.allOf(neededStopIdsFuture, tripFuture).join();
 
@@ -422,6 +422,7 @@ public class ParseTimetableService {
             String currentTripId = null;
             String currentKey = null;
             List<CompleteStop> currentStops = new ArrayList<>();
+            final Set<String> flushedTripIds = new HashSet<>();
 
             String line;
             while ((line = reader.readLine()) != null) {
@@ -433,6 +434,12 @@ public class ParseTimetableService {
                 if (key == null) continue;
 
                 if (!tripId.equals(currentTripId)) {
+                    if (flushedTripIds.contains(tripId)) {
+                        log.warn("stop_times.txt is not sorted by trip_id: '{}' reappears after being flushed; cache may be incomplete", tripId);
+                    }
+                    if (currentTripId != null) {
+                        flushedTripIds.add(currentTripId);
+                    }
                     flushTripToCache(currentKey, currentStops, cache);
                     currentTripId = tripId;
                     currentKey = key;
@@ -533,7 +540,9 @@ public class ParseTimetableService {
     }
 
     /**
-     * Parses the `route_stops.txt` file and returns only the stop IDs for routes in {@code routeIds}.
+     * Parses the {@code route_stops.txt} file and returns only the stop IDs for routes in {@code routeIds}.
+     * Direction and sequence columns are intentionally ignored; only stop IDs are needed to pre-filter
+     * which stops to load from {@code stops.txt}.
      * <p>
      * The file is expected to have the following format:
      * route_id,direction_id,stop_id,stop_sequence
@@ -542,7 +551,7 @@ public class ParseTimetableService {
      *
      * @return the set of stop IDs referenced by the configured routes
      */
-    private Set<String> parseRouteStops() {
+    private Set<String> parseRouteStopIds() {
         try (Stream<String> lines = Files.lines(Path.of(ROOT_PATH_FILE, ROUTE_STOPS_FILE_NAME))) {
             return lines
                     .map(line -> line.split(DELIMITER, ROUTE_STOP_STOP_ID + 2))
