@@ -12,11 +12,11 @@ This repository contains a Java-based application that provides metro timetable 
 
 ## Features
 
-- Display metro timetables for different routes and stations.
-- Search for specific metro schedules by station or time.
-- Manage and update metro timetable data.
-- User-friendly interface for quick navigation.
-- GTFS format https://gtfs.org/documentation/schedule/reference/#stop_timestxt
+- Fetches and parses Prague PID GTFS timetable data automatically.
+- Queries upcoming train departures by station name with optional direction filtering.
+- Caches parsed data in-memory; re-downloads only when the data is older than a configurable threshold.
+- Exposes Prometheus metrics for observability.
+- GTFS format: https://gtfs.org/documentation/schedule/reference/#stop_timestxt
 
 ## Installation
 
@@ -28,15 +28,54 @@ This repository contains a Java-based application that provides metro timetable 
    ```bash
    cd metro-timetable
    ```
-3. Open the project in your preferred Java IDE (e.g., IntelliJ IDEA, Eclipse).
-4. Build and run the application.
+3. Build and run:
+   ```bash
+   mvn spring-boot:run
+   ```
 
-## Usage
+## API
 
-1. Launch the application.
-2. Select a metro line or station to view the timetable.
-3. Use the search feature to find specific schedules.
-4. Update timetable data as needed.
+### `GET /pid`
+
+Triggers a full timetable download and parse cycle. Returns `200 OK` with no body.
+
+```bash
+curl http://localhost:8080/pid
+```
+
+### `POST /pid/station`
+
+Returns upcoming train departures for a given station.
+
+**Request body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `station` | string | yes | Station name (case-insensitive) |
+| `direction` | integer | no | Direction filter: `0` or `1`; omit to return both |
+| `limit` | integer | no | Max results to return; must be positive (default: `StationRequest.DEFAULT_LIMIT = 5`) |
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8080/pid/station \
+  -H "Content-Type: application/json" \
+  -d '{"station": "Muzeum", "direction": 0, "limit": 3}'
+```
+
+**Response** — array of `TrainDeparture` objects:
+
+```json
+[
+  {
+    "routeId": "L991",
+    "directionId": 0,
+    "departureTime": "14:32:00",
+    "destination": "Depo Hostivař",
+    "upcomingStations": ["Muzeum", "Náměstí Míru", "Jiřího z Poděbrad", "...]
+  }
+]
+```
 
 ## Monitoring
 
@@ -87,10 +126,10 @@ The monitoring stack (Prometheus Operator + Grafana) is expected to be installed
 
 ## Technologies Used
 
-- **Java**: The core programming language used for this project.
-- **Spring Boot**: Framework for building the application.
-- **Maven**: Dependency management and build tool.
-- **JUnit**: Testing framework for unit tests.
+- **Java 25** + **Spring Boot 3.4.4**: Core runtime and framework.
+- **Spring WebFlux (`WebClient`)**: Reactive HTTP client for downloading GTFS data.
+- **Maven**: Build and dependency management.
+- **JUnit 5 + Mockito + OkHttp MockWebServer**: Unit and integration testing.
 - **Prometheus + Grafana**: Metrics collection and dashboards.
 - **SonarCloud**: Code quality and security analysis.
 - **CircleCI**: Continuous integration and deployment.
@@ -122,5 +161,3 @@ This project is licensed under the [MIT License](LICENSE).
 For any inquiries or support, please contact [kejhy93](https://github.com/kejhy93).
 
 ---
-
-Feel free to adjust sections like "Features" or "Usage" to better reflect the specific functionalities of your project.

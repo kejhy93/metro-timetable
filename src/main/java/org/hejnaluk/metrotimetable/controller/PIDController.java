@@ -6,10 +6,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
 import org.hejnaluk.metrotimetable.service.TimetableRefreshService;
+import org.hejnaluk.metrotimetable.dto.StationRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -38,19 +41,14 @@ public class PIDController {
     /**
      * Returns upcoming train departures for a given station.
      *
-     * @param station   the station name to query (case-insensitive)
-     * @param direction optional direction filter ({@code 0} or {@code 1}); omit to return both directions
-     * @param limit     maximum number of results to return (default {@code 5}, capped by server-side max)
+     * @param request body containing station name, optional direction filter, and optional result limit
      * @return {@code 200 OK} with the list of upcoming {@link TrainDeparture}s, sorted by departure time
      */
-    @GetMapping("/station")
-    public ResponseEntity<List<TrainDeparture>> getTrainsForStation(
-            @RequestParam String station,
-            @RequestParam(required = false) Integer direction,
-            @RequestParam(defaultValue = "5") Integer limit) {
-        int effectiveLimit = limit != null ? limit : 5;
-        log.info("GET /pid/station - station={}, direction={}, limit={}", station, direction, effectiveLimit);
-        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(station, direction, effectiveLimit));
+    @PostMapping("/station")
+    public ResponseEntity<List<TrainDeparture>> getTrainsForStation(@Valid @RequestBody StationRequest request) {
+        int effectiveLimit = request.limit() != null ? request.limit() : StationRequest.DEFAULT_LIMIT;
+        log.info("POST /pid/station - station={}, direction={}, limit={}", request.station(), request.direction(), effectiveLimit);
+        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(request.station(), request.direction(), effectiveLimit));
     }
 
 }

@@ -21,22 +21,24 @@ case "$ENV" in
 esac
 
 request() {
-  local url="$1"
-  local response http_code body
-  response=$(curl -s -w "\n%{http_code}" "$url")
+  local body="$1"
+  local response http_code resp_body
+  response=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/pid/station" \
+    -H "Content-Type: application/json" \
+    -d "$body")
   http_code=$(echo "$response" | tail -1)
-  body=$(echo "$response" | head -n -1)
+  resp_body=$(echo "$response" | head -n -1)
   echo "HTTP $http_code"
-  echo "$body" | jq .
+  echo "$resp_body" | jq .
 }
 
 echo "=== All directions, default limit ==="
-request "$BASE_URL/pid/station?station=Muzeum"
+request '{"station": "Muzeum"}'
 
 echo ""
 echo "=== Direction 0 only ==="
-request "$BASE_URL/pid/station?station=Muzeum&direction=0"
+request '{"station": "Muzeum", "direction": 0}'
 
 echo ""
 echo "=== Direction 0, limit 3 ==="
-request "$BASE_URL/pid/station?station=Muzeum&direction=0&limit=3"
+request '{"station": "Muzeum", "direction": 0, "limit": 3}'

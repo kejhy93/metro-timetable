@@ -1,5 +1,6 @@
 package org.hejnaluk.metrotimetable.controller;
 
+import org.hejnaluk.metrotimetable.dto.StationRequest;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
 import org.hejnaluk.metrotimetable.service.TimetableRefreshService;
@@ -8,15 +9,20 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.LocalTime;
 import java.util.List;
 
-import org.springframework.http.HttpStatus;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class PIDControllerTest {
 
@@ -26,11 +32,17 @@ class PIDControllerTest {
     private ParseTimetableService parseTimetableService;
 
     private PIDController controller;
+    private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
         controller = new PIDController(timetableRefreshService, parseTimetableService);
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setValidator(validator)
+                .build();
     }
 
     @Test
@@ -47,7 +59,7 @@ class PIDControllerTest {
         int limit = 5;
         when(parseTimetableService.getTrainsForStation(station, direction, limit)).thenReturn(List.of());
 
-        controller.getTrainsForStation(station, direction, limit);
+        controller.getTrainsForStation(new StationRequest(station, direction, limit));
 
         Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, limit);
     }
@@ -59,7 +71,7 @@ class PIDControllerTest {
         TrainDeparture departure = new TrainDeparture("L991", 0, LocalTime.of(14, 0), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
         when(parseTimetableService.getTrainsForStation(station, null, limit)).thenReturn(List.of(departure));
 
-        var response = controller.getTrainsForStation(station, null, limit);
+        var response = controller.getTrainsForStation(new StationRequest(station, null, limit));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsExactly(departure);
@@ -69,13 +81,12 @@ class PIDControllerTest {
     void getTrainsForStation_usesDefaultLimitWhenNotProvided() {
         String station = "Muzeum";
         Integer direction = null;
-        int defaultLimit = 5;
         TrainDeparture departure = new TrainDeparture("L991", 0, LocalTime.of(14, 0), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
-        when(parseTimetableService.getTrainsForStation(station, direction, defaultLimit)).thenReturn(List.of(departure));
+        when(parseTimetableService.getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT)).thenReturn(List.of(departure));
 
-        var response = controller.getTrainsForStation(station, direction, null);
+        var response = controller.getTrainsForStation(new StationRequest(station, direction, null));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, defaultLimit);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsExactly(departure);
     }
@@ -83,12 +94,11 @@ class PIDControllerTest {
     @Test
     void getTrainsForStation_defaultLimit() {
         String station = "Muzeum";
-        int defaultLimit = 5;
-        when(parseTimetableService.getTrainsForStation(station, null, defaultLimit)).thenReturn(List.of());
+        when(parseTimetableService.getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT)).thenReturn(List.of());
 
-        controller.getTrainsForStation(station, null, defaultLimit);
+        controller.getTrainsForStation(new StationRequest(station, null, StationRequest.DEFAULT_LIMIT));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, defaultLimit);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT);
     }
 
     @Test
@@ -97,8 +107,48 @@ class PIDControllerTest {
         int limit = 3;
         when(parseTimetableService.getTrainsForStation(station, null, limit)).thenReturn(List.of());
 
-        controller.getTrainsForStation(station, null, limit);
+        controller.getTrainsForStation(new StationRequest(station, null, limit));
 
         Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, limit);
+    }
+
+    @Test
+    void getTrainsForStation_rejects_blankStation() throws Exception {
+        mockMvc.perform(post("/pid/station")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"station\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrainsForStation_rejects_nullStation() throws Exception {
+        mockMvc.perform(post("/pid/station")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"station\":null}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrainsForStation_rejects_invalidDirection() throws Exception {
+        mockMvc.perform(post("/pid/station")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"station\":\"Muzeum\",\"direction\":2}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrainsForStation_rejects_zeroLimit() throws Exception {
+        mockMvc.perform(post("/pid/station")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"station\":\"Muzeum\",\"limit\":0}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTrainsForStation_rejects_negativeLimit() throws Exception {
+        mockMvc.perform(post("/pid/station")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"station\":\"Muzeum\",\"limit\":-1}"))
+                .andExpect(status().isBadRequest());
     }
 }
