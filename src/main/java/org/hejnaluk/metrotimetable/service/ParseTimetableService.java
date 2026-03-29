@@ -417,13 +417,11 @@ public class ParseTimetableService {
             Map<String, String> tripToKey,
             Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
         try (BufferedReader reader = Files.newBufferedReader(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))) {
-            if (reader.readLine() == null) return; // skip header; empty file → nothing to parse
+            String headerLine = reader.readLine();
+            if (headerLine == null)
+                return; // skip header; empty file → nothing to parse
 
-            String currentTripId = null;
-            String currentKey = null;
-            List<CompleteStop> currentStops = new ArrayList<>();
-            final Set<String> flushedTripIds = new HashSet<>();
-
+            final TripAccumulator acc = new TripAccumulator();
             String line;
             while ((line = reader.readLine()) != null) {
                 // Extract trip_id before any split — skips irrelevant rows with zero allocation.
@@ -433,25 +431,41 @@ public class ParseTimetableService {
                 final String key = tripToKey.get(tripId);
                 if (key == null) continue;
 
-                if (!tripId.equals(currentTripId)) {
-                    if (flushedTripIds.contains(tripId)) {
-                        log.warn("stop_times.txt is not sorted by trip_id: '{}' reappears after being flushed; cache may be incomplete", tripId);
-                    }
-                    if (currentTripId != null) {
-                        flushedTripIds.add(currentTripId);
-                    }
-                    flushTripToCache(currentKey, currentStops, cache);
-                    currentTripId = tripId;
-                    currentKey = key;
-                    currentStops = new ArrayList<>();
+                if (!tripId.equals(acc.currentTripId)) {
+                    acc.onNewTrip(tripId, key, cache);
                 }
-
-                currentStops.add(parseCompleteStop(line, stopsMap));
+                acc.currentStops.add(parseCompleteStop(line, stopsMap));
             }
 
-            flushTripToCache(currentKey, currentStops, cache); // flush the last trip
+            acc.onNewTrip(null, null, cache); // flush the last trip
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOP_TIME_FILE_NAME, e);
+        }
+    }
+
+    /**
+     * Accumulates stops for the current trip and flushes them into the cache on trip transitions.
+     * Tracks flushed trip IDs to warn if {@code stop_times.txt} is not sorted by {@code trip_id}.
+     */
+    private class TripAccumulator {
+        String currentTripId = null;
+        String currentKey = null;
+        List<CompleteStop> currentStops = new ArrayList<>();
+        private final Set<String> flushedTripIds = new HashSet<>();
+
+        void onNewTrip(String tripId, String key, Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
+            warnIfUnsorted(tripId);
+            if (currentTripId != null) flushedTripIds.add(currentTripId);
+            flushTripToCache(currentKey, currentStops, cache);
+            currentTripId = tripId;
+            currentKey = key;
+            currentStops = new ArrayList<>();
+        }
+
+        private void warnIfUnsorted(String tripId) {
+            if (flushedTripIds.contains(tripId)) {
+                log.warn("stop_times.txt is not sorted by trip_id: '{}' reappears after being flushed; cache may be incomplete", tripId);
+            }
         }
     }
 
