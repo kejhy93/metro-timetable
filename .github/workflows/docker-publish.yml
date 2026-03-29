@@ -47,6 +47,7 @@ jobs:
       # Build the Spring Boot app with Maven (you can change it to Gradle if needed)
       - name: Build with Maven
         run: mvn clean install package -DskipTests
+        working-directory: server
 
       # Install the cosign tool except on PR
       # https://github.com/sigstore/cosign-installer
@@ -90,7 +91,7 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
-          context: .
+          context: server
           push: ${{ github.event_name != 'pull_request' }}
 #          push: ${{ github.event_name == 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

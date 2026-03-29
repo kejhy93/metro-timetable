@@ -44,6 +44,6 @@ jobs:
           script: |
             cd ~/metro-timetable
             git fetch --tags
-            kubectl apply -k k8s/overlays/prod
+            kubectl apply -k server/k8s/overlays/prod
             kubectl set image deployment/metro-timetable metro-timetable=ghcr.io/kejhy93/metro-timetable:$IMAGE_TAG -n metro-prod
             kubectl rollout status deployment/metro-timetable -n metro-prod --timeout=120s
