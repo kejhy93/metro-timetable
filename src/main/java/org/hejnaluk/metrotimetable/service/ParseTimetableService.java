@@ -425,9 +425,10 @@ public class ParseTimetableService {
             String line;
             while ((line = reader.readLine()) != null) {
                 // Extract trip_id before any split — skips irrelevant rows with zero allocation.
+                // When comma <= 0 (malformed line), tripId is null and tripToKey.get(null) returns null,
+                // so both guard cases collapse into the single key == null check below.
                 int comma = line.indexOf(DELIMITER);
-                if (comma <= 0) continue;
-                final String tripId = line.substring(0, comma);
+                final String tripId = comma > 0 ? line.substring(0, comma) : null;
                 final String key = tripToKey.get(tripId);
                 if (key == null) continue;
 
@@ -456,7 +457,7 @@ public class ParseTimetableService {
         void onNewTrip(String tripId, String key, Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
             warnIfUnsorted(tripId);
             if (currentTripId != null) flushedTripIds.add(currentTripId);
-            flushTripToCache(currentKey, currentStops, cache);
+            flush(cache);
             currentTripId = tripId;
             currentKey = key;
             currentStops = new ArrayList<>();
@@ -467,19 +468,16 @@ public class ParseTimetableService {
                 log.warn("stop_times.txt is not sorted by trip_id: '{}' reappears after being flushed; cache may be incomplete", tripId);
             }
         }
-    }
 
-    /**
-     * Adds the accumulated stops for a trip into the cache, keyed by the first stop's arrival time.
-     * Does nothing if {@code key} is null (no relevant trip started yet) or {@code stops} is empty.
-     */
-    private void flushTripToCache(
-            String key,
-            List<CompleteStop> stops,
-            Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
-        if (key == null || stops.isEmpty()) return;
-        cache.computeIfAbsent(key, k -> new ConcurrentSkipListMap<>())
-                .put(stops.getFirst().arrivalTime(), stops);
+        /**
+         * Adds the accumulated stops for a trip into the cache, keyed by the first stop's arrival time.
+         * Does nothing if {@code currentKey} is null (no relevant trip started yet) or {@code currentStops} is empty.
+         */
+        private void flush(Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
+            if (currentKey == null || currentStops.isEmpty()) return;
+            cache.computeIfAbsent(currentKey, k -> new ConcurrentSkipListMap<>())
+                    .put(currentStops.getFirst().arrivalTime(), currentStops);
+        }
     }
 
     /**
