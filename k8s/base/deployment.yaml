@@ -28,8 +28,22 @@ spec:
             - configMapRef:
                 name: metro-timetable-config
           env:
-            - name: JAVA_OPTS
-              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+            # JAVA_TOOL_OPTIONS is the standard env var read directly by the JVM.
+            # JAVA_OPTS is only used by shell-based launch scripts and is silently
+            # ignored when running "java -jar" directly (as in this Dockerfile).
+            #
+            # Memory budget for 420Mi container:
+            #   Heap (Xmx):        180MB
+            #   Metaspace:         120MB  (Spring Boot loads many classes)
+            #   Code cache:         64MB  (default ceiling is 240MB — capping saves ~100MB)
+            #   Thread stacks:      ~25MB (50 threads × 512KB)
+            #   Native/other:       ~30MB
+            #   Total:             ~419MB
+            #
+            # SerialGC: no background GC threads; appropriate for a single-instance
+            # service with infrequent batch parses and low query concurrency.
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx180m -XX:MaxMetaspaceSize=120m -XX:ReservedCodeCacheSize=64m -XX:+UseSerialGC"
           volumeMounts:
             - name: timetable-data
               mountPath: /tmp/timetable
@@ -47,10 +61,10 @@ spec:
             periodSeconds: 30
           resources:
             requests:
-              memory: "256Mi"
+              memory: "420Mi"
               cpu: "250m"
             limits:
-              memory: "256Mi"
+              memory: "420Mi"
               cpu: "500m"
       volumes:
         - name: timetable-data
