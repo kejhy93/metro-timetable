@@ -176,7 +176,7 @@ public class ParseTimetableService {
         final var stopsMap = parseStops(neededStopIds);
 
         // Build tripId → cache key; small map, only relevant trips present.
-        final Map<String, String> tripToKey = new HashMap<>(tripList.size() * 2);
+        final Map<String, String> tripToKey = HashMap.newHashMap(tripList.size());
         for (final Trip trip : tripList) {
             tripToKey.put(trip.tripId(), trip.routeId() + "-" + trip.directionId());
         }
@@ -417,7 +417,7 @@ public class ParseTimetableService {
             Map<String, String> tripToKey,
             Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
         try (BufferedReader reader = Files.newBufferedReader(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))) {
-            reader.readLine(); // skip header
+            if (reader.readLine() == null) return; // skip header; empty file → nothing to parse
 
             String currentTripId = null;
             String currentKey = null;
@@ -433,35 +433,57 @@ public class ParseTimetableService {
                 if (key == null) continue;
 
                 if (!tripId.equals(currentTripId)) {
-                    if (currentTripId != null && !currentStops.isEmpty()) {
-                        cache.computeIfAbsent(currentKey, k -> new ConcurrentSkipListMap<>())
-                                .put(currentStops.getFirst().arrivalTime(), currentStops);
-                    }
+                    flushTripToCache(currentKey, currentStops, cache);
                     currentTripId = tripId;
                     currentKey = key;
                     currentStops = new ArrayList<>();
                 }
 
-                final String[] parts = line.split(DELIMITER, STOP_TIME_STOP_ID + 2);
-                final var stopId = parts[STOP_TIME_STOP_ID];
-                var stop = stopsMap.get(stopId);
-                if (stop == null) stop = stopsMap.get(findOppositeStopId(stopId));
-                if (stop == null) throw new IllegalArgumentException("Stop not found: " + stopId);
-                currentStops.add(CompleteStop.builder()
-                        .stop(stop)
-                        .arrivalTime(parseGtfsTime(parts[STOP_TIME_ARRIVAL_TIME]))
-                        .departureTime(parseGtfsTime(parts[STOP_TIME_DEPARTURE_TIME]))
-                        .build());
+                currentStops.add(parseCompleteStop(line, stopsMap));
             }
 
-            // Flush the last trip
-            if (currentTripId != null && !currentStops.isEmpty()) {
-                cache.computeIfAbsent(currentKey, k -> new ConcurrentSkipListMap<>())
-                        .put(currentStops.getFirst().arrivalTime(), currentStops);
-            }
+            flushTripToCache(currentKey, currentStops, cache); // flush the last trip
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, STOP_TIME_FILE_NAME, e);
         }
+    }
+
+    /**
+     * Adds the accumulated stops for a trip into the cache, keyed by the first stop's arrival time.
+     * Does nothing if {@code key} is null (no relevant trip started yet) or {@code stops} is empty.
+     */
+    private void flushTripToCache(
+            String key,
+            List<CompleteStop> stops,
+            Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
+        if (key == null || stops.isEmpty()) return;
+        cache.computeIfAbsent(key, k -> new ConcurrentSkipListMap<>())
+                .put(stops.getFirst().arrivalTime(), stops);
+    }
+
+    /**
+     * Parses a single {@code stop_times.txt} row into a {@link CompleteStop}.
+     * Resolves the stop via {@link #resolveStop}, which falls back to the opposite platform if needed.
+     */
+    private CompleteStop parseCompleteStop(String line, Map<String, Stop> stopsMap) {
+        final String[] parts = line.split(DELIMITER, STOP_TIME_STOP_ID + 2);
+        return CompleteStop.builder()
+                .stop(resolveStop(parts[STOP_TIME_STOP_ID], stopsMap))
+                .arrivalTime(parseGtfsTime(parts[STOP_TIME_ARRIVAL_TIME]))
+                .departureTime(parseGtfsTime(parts[STOP_TIME_DEPARTURE_TIME]))
+                .build();
+    }
+
+    /**
+     * Looks up a stop by ID, falling back to the opposite platform if the primary ID is absent.
+     *
+     * @throws IllegalArgumentException if neither the stop nor its opposite platform is found
+     */
+    private Stop resolveStop(String stopId, Map<String, Stop> stopsMap) {
+        Stop stop = stopsMap.get(stopId);
+        if (stop == null) stop = stopsMap.get(findOppositeStopId(stopId));
+        if (stop == null) throw new IllegalArgumentException("Stop not found: " + stopId);
+        return stop;
     }
 
     /**
