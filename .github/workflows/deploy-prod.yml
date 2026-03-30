@@ -8,6 +8,9 @@ on:
     branches:
       - 'v*.*.*'
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
   deploy:
@@ -47,3 +50,63 @@ jobs:
             kubectl apply -k server/k8s/overlays/prod
             kubectl set image deployment/metro-timetable metro-timetable=ghcr.io/kejhy93/metro-timetable:$IMAGE_TAG -n metro-prod
             kubectl rollout status deployment/metro-timetable -n metro-prod --timeout=120s
+
+  deploy-web:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build wasmJs
+        working-directory: ui
+        run: ./gradlew :composeApp:wasmJsBrowserProductionBuild
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ui/composeApp/build/dist/wasmJs/productionExecutable
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-desktop:
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build JVM uber JAR
+        working-directory: ui
+        run: ./gradlew :composeApp:packageUberJarForCurrentOS
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ui/composeApp/build/compose/jars/*.jar
+          fail_on_unmatched_files: true
