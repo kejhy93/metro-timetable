@@ -212,6 +212,35 @@ All commands run from the `ui/` directory.
 - **Ktor**: Multiplatform HTTP client used in the KMP UI.
 - **Koin**: Dependency injection for the KMP UI.
 
+## Release
+
+Releases are triggered by pushing a version tag. This runs three automated deployments in parallel via GitHub Actions.
+
+### How to release
+
+```bash
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+### What happens
+
+| Job | Trigger | Output |
+|---|---|---|
+| `deploy-web` | tag push | Builds `wasmJs` bundle, deploys to **GitHub Pages** |
+| `deploy-desktop` | tag push | Builds uber JAR, attaches to **GitHub Release** `v1.2.3` |
+| `deploy` (server) | after Docker workflow succeeds | Rolls out new server image to **k8s** (`metro-prod`) |
+
+The server deployment is indirect: the tag also triggers `docker-publish.yml` which builds and pushes the container image, and only once that succeeds does the `deploy` job roll it out to the cluster.
+
+### One-time setup
+
+Before the first release, enable GitHub Pages in repository Settings → Pages → Source → **GitHub Actions**.
+
+### Version tag format
+
+Tags must match `v*.*.*` (e.g. `v1.0.0`, `v2.3.1`). Non-matching tags do not trigger any deployment.
+
 ## Contributing
 
 Contributions are welcome! If you'd like to contribute:
