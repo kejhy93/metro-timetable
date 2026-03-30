@@ -96,9 +96,10 @@ private fun DeparturesList(departures: List<TrainDeparture>, updatedAt: LocalTim
 
 @Composable
 private fun DepartureItem(departure: TrainDeparture) {
-    val minutesUntil = minutesUntil(departure.departureTime)
-    val localTime = Instant.parse(departure.departureTime)
-        .toLocalDateTime(TimeZone.currentSystemDefault()).time
+    val departureInstant = Instant.parse(departure.departureTime)
+    val minutesUntil = minutesUntil(departureInstant)
+    val localTime = departureInstant
+        .toLocalDateTime(TimeZone.of("Europe/Prague")).time
 
     Card(
         modifier = Modifier
@@ -118,7 +119,7 @@ private fun DepartureItem(departure: TrainDeparture) {
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
-                    text = "${localTime.hour}:${localTime.minute.toString().padStart(2, '0')}",
+                    text = "${localTime.hour.toString().padStart(2, '0')}:${localTime.minute.toString().padStart(2, '0')}",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -130,8 +131,7 @@ private fun DepartureItem(departure: TrainDeparture) {
     }
 }
 
-private fun minutesUntil(departureTime: String): Long {
-    val departure = Instant.parse(departureTime)
+private fun minutesUntil(departure: Instant): Long {
     val diff = departure - Clock.System.now()
     return diff.inWholeMinutes
 }

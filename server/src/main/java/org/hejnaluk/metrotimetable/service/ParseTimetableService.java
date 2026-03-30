@@ -294,6 +294,11 @@ public class ParseTimetableService {
         final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
         if (trips == null) return Stream.empty();
 
+        // TODO: LocalDate.now(PRAGUE_ZONE) is inaccurate for GTFS trips that belong to the
+        //  previous service day (i.e. originally >24h times, normalized via modulo in parseGtfsTime).
+        //  Around midnight, these trips should use the previous day's service date rather than today.
+        //  A proper fix requires threading the service date (from calendar.txt/calendar_dates.txt)
+        //  through the data model.
         final LocalDate today = LocalDate.now(PRAGUE_ZONE);
         return trips.values().stream()
                 .filter(stops -> stopIndex < stops.size())
