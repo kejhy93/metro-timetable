@@ -1,0 +1,54 @@
+package org.hejnaluk.metrotimetable.ui.presentation.station
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import org.hejnaluk.metrotimetable.ui.data.local.LineDataSource
+import org.koin.compose.koinInject
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StationScreen(
+    lineId: String,
+    onStationSelected: (station: String) -> Unit,
+    dataSource: LineDataSource = koinInject()
+) {
+    val line = dataSource.getLines().firstOrNull { it.id == lineId }
+    val stations = dataSource.getStations(lineId)
+
+    Scaffold(
+        topBar = {
+            TopAppBar(title = { Text("Line ${line?.name ?: lineId}") })
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            items(stations) { station ->
+                Text(
+                    text = station,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onStationSelected(station) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+                HorizontalDivider()
+            }
+        }
+    }
+}
