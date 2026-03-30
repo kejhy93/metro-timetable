@@ -124,6 +124,81 @@ In production Grafana is exposed at `https://hejnaluk.dev/grafana` via a TLS ing
 
 The monitoring stack (Prometheus Operator + Grafana) is expected to be installed in the `monitoring` namespace via the `kube-prometheus-stack` Helm chart. The `ServiceMonitor` carries the label `release: prometheus` so it is picked up by the operator automatically.
 
+## UI (Kotlin Multiplatform)
+
+The `ui/` directory contains a Kotlin Multiplatform (KMP) app built with Compose Multiplatform targeting Android, iOS, Desktop (JVM), and Web (JS + Wasm).
+
+### Structure
+
+```
+ui/
+└── composeApp/
+    └── src/
+        ├── commonMain/       # Shared Compose UI and business logic
+        │   ├── data/
+        │   │   ├── api/      # Ktor HTTP client → POST /pid/station
+        │   │   ├── local/    # Hard-coded metro line/station data
+        │   │   └── MetroRepository.kt
+        │   ├── di/           # Koin dependency injection module
+        │   ├── navigation/   # Type-safe Compose Navigation
+        │   └── presentation/ # Screens: Line → Station → Direction → Departures
+        ├── androidMain/      # Android entry point (MainActivity)
+        ├── iosMain/          # iOS entry point (MainViewController)
+        ├── jvmMain/          # Desktop entry point
+        ├── jsMain/           # JS/browser entry point
+        └── wasmJsMain/       # Wasm/browser entry point
+```
+
+### User flow
+
+**Line** → **Station** → **Direction** → **Departures**
+
+1. Pick a metro line (A / B / C, colour-coded).
+2. Pick a station along that line.
+3. Pick a direction (terminus 0 or terminus 1).
+4. View upcoming train departures fetched from the backend.
+
+### Key dependencies
+
+| Library | Role |
+|---|---|
+| Compose Multiplatform | Shared UI across all targets |
+| Ktor | HTTP client for `POST /pid/station` |
+| Koin | Dependency injection |
+| Jetpack Navigation (Compose) | Type-safe screen navigation |
+| `kotlinx.datetime` | Date/time handling |
+| `kotlinx.serialization` | JSON serialisation |
+
+### Backend connection
+
+`MetroApiClient` calls `POST /pid/station` at `https://hejnaluk.dev`. To point at a local backend, change `BASE_URL` in `ui/composeApp/src/commonMain/kotlin/.../data/api/MetroApiClient.kt`.
+
+### Build and run
+
+All commands run from the `ui/` directory.
+
+**Android:**
+```bash
+./gradlew :composeApp:assembleDebug
+```
+
+**Desktop (JVM):**
+```bash
+./gradlew :composeApp:run
+```
+
+**Web (Wasm — modern browsers):**
+```bash
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun
+```
+
+**Web (JS — wider browser support):**
+```bash
+./gradlew :composeApp:jsBrowserDevelopmentRun
+```
+
+**iOS:** Open `ui/iosApp` in Xcode and run.
+
 ## Technologies Used
 
 - **Java 25** + **Spring Boot 3.4.4**: Core runtime and framework.
@@ -133,6 +208,9 @@ The monitoring stack (Prometheus Operator + Grafana) is expected to be installed
 - **Prometheus + Grafana**: Metrics collection and dashboards.
 - **SonarCloud**: Code quality and security analysis.
 - **CircleCI**: Continuous integration and deployment.
+- **Kotlin Multiplatform + Compose Multiplatform**: Cross-platform UI (Android, iOS, Desktop, Web).
+- **Ktor**: Multiplatform HTTP client used in the KMP UI.
+- **Koin**: Dependency injection for the KMP UI.
 
 ## Contributing
 

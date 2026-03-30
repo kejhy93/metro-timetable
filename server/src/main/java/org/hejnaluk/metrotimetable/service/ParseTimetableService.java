@@ -13,7 +13,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -127,6 +130,7 @@ public class ParseTimetableService {
     public static final String NEW_LINE_AND_TAB = "\n\t";
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
     /**
      * Immutable snapshot of parsed timetable data, swapped atomically on each refresh.
@@ -220,12 +224,13 @@ public class ParseTimetableService {
     }
 
     /**
-     * Returns the current local time. Overridable in tests to control the clock.
+     * Returns the current Prague local time. Overridable in tests to control the clock.
+     * GTFS timetable data from PID uses Prague local time, so comparisons must use the same zone.
      *
-     * @return the current {@link LocalTime}
+     * @return the current {@link LocalTime} in Europe/Prague
      */
     protected LocalTime getNow() {
-        return LocalTime.now();
+        return LocalTime.now(PRAGUE_ZONE);
     }
 
     /**
@@ -289,13 +294,19 @@ public class ParseTimetableService {
         final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
         if (trips == null) return Stream.empty();
 
+        // TODO: LocalDate.now(PRAGUE_ZONE) is inaccurate for GTFS trips that belong to the
+        //  previous service day (i.e. originally >24h times, normalized via modulo in parseGtfsTime).
+        //  Around midnight, these trips should use the previous day's service date rather than today.
+        //  A proper fix requires threading the service date (from calendar.txt/calendar_dates.txt)
+        //  through the data model.
+        final LocalDate today = LocalDate.now(PRAGUE_ZONE);
         return trips.values().stream()
                 .filter(stops -> stopIndex < stops.size())
                 .filter(stops -> !stops.get(stopIndex).departureTime().isBefore(now))
                 .map(stops -> new TrainDeparture(
                         routeId,
                         directionId,
-                        stops.get(stopIndex).departureTime(),
+                        stops.get(stopIndex).departureTime().atDate(today).atZone(PRAGUE_ZONE).toInstant(),
                         stops.getLast().stop().stopName(),
                         stops.subList(stopIndex, stops.size()).stream().map(cs -> cs.stop().stopName()).toList()
                 ));

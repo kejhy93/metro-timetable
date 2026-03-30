@@ -5,7 +5,9 @@ import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ParseTimetableServiceTest {
 
     private static final LocalTime FIXED_NOW = LocalTime.of(12, 0);
+    private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
     private ParseTimetableService service;
 
@@ -44,7 +47,7 @@ class ParseTimetableServiceTest {
         List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
 
         assertThat(result).hasSize(1);
-        assertThat(result.getFirst().departureTime()).isEqualTo(LocalTime.of(13, 1));
+        assertThat(result.getFirst().departureTime().atZone(PRAGUE_ZONE).toLocalTime()).isEqualTo(LocalTime.of(13, 1));
     }
 
     @Test
@@ -103,7 +106,7 @@ class ParseTimetableServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result)
-                .extracting(TrainDeparture::departureTime)
+                .extracting(d -> d.departureTime().atZone(PRAGUE_ZONE).toLocalTime())
                 .containsExactly(
                         LocalTime.of(13, 1),
                         LocalTime.of(14, 1)
