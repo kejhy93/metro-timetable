@@ -20,10 +20,10 @@ jobs:
       - checkout
       - run:
           name: "Compile"
-          command: mvn clean compile
+          command: cd server && mvn clean compile
       - run:
           name: "Tests"
-          command: mvn clean compile test
+          command: cd server && mvn clean compile test
 
 # Orchestrate jobs using workflows
 # See: https://circleci.com/docs/workflows/ & https://circleci.com/docs/configuration-reference/#workflows

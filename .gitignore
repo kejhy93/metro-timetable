@@ -56,3 +56,20 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Gradle ###
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+local.properties
+
+### Kotlin/Native ###
+.konan/
+
+### Xcode ###
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.ipa
+
+### iOS ###
+Pods/
