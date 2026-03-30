@@ -240,6 +240,15 @@ The server deployment is indirect: the tag also triggers `docker-publish.yml` wh
 
 Tags must match `v*.*.*` (e.g. `v1.0.0`, `v2.3.1`). Non-matching tags do not trigger any deployment.
 
+### Deployed URLs
+
+| Artefact | URL |
+|---|---|
+| Web app (GitHub Pages) | https://kejhy93.github.io/metro-timetable |
+| Desktop JAR (GitHub Release) | https://github.com/kejhy93/metro-timetable/releases/latest |
+
+> Before the first release, enable GitHub Pages in repository Settings → Pages → Source → **GitHub Actions**.
+
 ## Contributing
 
 Contributions are welcome! If you'd like to contribute:
