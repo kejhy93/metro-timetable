@@ -75,7 +75,7 @@ jobs:
 
       - name: Build wasmJs
         working-directory: ui
-        run: ./gradlew :composeApp:wasmJsBrowserProductionBuild
+        run: ./gradlew :composeApp:wasmJsBrowserDistribution
 
       - uses: actions/configure-pages@v5
 
