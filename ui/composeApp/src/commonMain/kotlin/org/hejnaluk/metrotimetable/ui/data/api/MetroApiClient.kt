@@ -30,6 +30,6 @@ class MetroApiClient(engine: HttpClientEngine) {
         }.body()
 
     companion object {
-        const val BASE_URL = "http://localhost:8080"
+        const val BASE_URL = "https://hejnaluk.dev"
     }
 }
