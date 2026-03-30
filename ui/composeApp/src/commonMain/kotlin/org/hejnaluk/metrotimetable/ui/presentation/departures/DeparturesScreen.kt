@@ -23,8 +23,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.datetime.Clock
+import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
-import org.hejnaluk.metrotimetable.ui.currentLocalTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.hejnaluk.metrotimetable.ui.data.api.TrainDeparture
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -93,8 +96,9 @@ private fun DeparturesList(departures: List<TrainDeparture>, updatedAt: LocalTim
 
 @Composable
 private fun DepartureItem(departure: TrainDeparture) {
-    val now = currentLocalTime()
-    val minutesUntil = minutesUntil(departure.departureTime, now)
+    val minutesUntil = minutesUntil(departure.departureTime)
+    val localTime = Instant.parse(departure.departureTime)
+        .toLocalDateTime(TimeZone.currentSystemDefault()).time
 
     Card(
         modifier = Modifier
@@ -114,7 +118,7 @@ private fun DepartureItem(departure: TrainDeparture) {
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
-                    text = departure.departureTime,
+                    text = "${localTime.hour}:${localTime.minute.toString().padStart(2, '0')}",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -126,11 +130,8 @@ private fun DepartureItem(departure: TrainDeparture) {
     }
 }
 
-private fun minutesUntil(departureTime: String, now: LocalTime): Long {
-    val parts = departureTime.split(":")
-    val depSeconds = parts[0].toLong() * 3600 + parts[1].toLong() * 60 + parts[2].toLong()
-    val nowSeconds = now.hour.toLong() * 3600 + now.minute.toLong() * 60 + now.second.toLong()
-    var diff = depSeconds - nowSeconds
-    if (diff < 0) diff += 86400L
-    return diff / 60
+private fun minutesUntil(departureTime: String): Long {
+    val departure = Instant.parse(departureTime)
+    val diff = departure - Clock.System.now()
+    return diff.inWholeMinutes
 }
