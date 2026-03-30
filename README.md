@@ -218,10 +218,13 @@ Releases are triggered by pushing a version tag. This runs three automated deplo
 
 ### How to release
 
+Use the provided script — it reads the latest tag, prompts for release type, and pushes the new tag:
+
 ```bash
-git tag v1.2.3
-git push origin v1.2.3
+./release.sh
 ```
+
+The script will show the current tag, let you pick patch / minor / major, and ask for confirmation before tagging and pushing.
 
 ### What happens
 
