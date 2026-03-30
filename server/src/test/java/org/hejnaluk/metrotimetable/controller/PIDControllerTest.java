@@ -15,7 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
-import java.time.LocalTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,7 +68,7 @@ class PIDControllerTest {
     void getTrainsForStation_returnsServiceResult() {
         String station = "Muzeum";
         int limit = 5;
-        TrainDeparture departure = new TrainDeparture("L991", 0, LocalTime.of(14, 0), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
+        TrainDeparture departure = new TrainDeparture("L991", 0, Instant.parse("2026-03-30T12:00:00Z"), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
         when(parseTimetableService.getTrainsForStation(station, null, limit)).thenReturn(List.of(departure));
 
         var response = controller.getTrainsForStation(new StationRequest(station, null, limit));
@@ -81,7 +81,7 @@ class PIDControllerTest {
     void getTrainsForStation_usesDefaultLimitWhenNotProvided() {
         String station = "Muzeum";
         Integer direction = null;
-        TrainDeparture departure = new TrainDeparture("L991", 0, LocalTime.of(14, 0), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
+        TrainDeparture departure = new TrainDeparture("L991", 0, Instant.parse("2026-03-30T12:00:00Z"), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
         when(parseTimetableService.getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT)).thenReturn(List.of(departure));
 
         var response = controller.getTrainsForStation(new StationRequest(station, direction, null));
