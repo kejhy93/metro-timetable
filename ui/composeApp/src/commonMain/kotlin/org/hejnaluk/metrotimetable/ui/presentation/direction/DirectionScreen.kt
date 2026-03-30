@@ -48,13 +48,13 @@ fun DirectionScreen(
             if (line != null) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(0, line.terminus0) }
+                    onClick = { onDirectionSelected(1, line.terminus0) }
                 ) {
                     Text("→ ${line.terminus0}")
                 }
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(1, line.terminus1) }
+                    onClick = { onDirectionSelected(0, line.terminus1) }
                 ) {
                     Text("→ ${line.terminus1}")
                 }
