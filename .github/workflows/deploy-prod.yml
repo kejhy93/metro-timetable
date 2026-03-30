@@ -70,6 +70,8 @@ jobs:
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: ui
 
       - name: Build wasmJs
         working-directory: ui
@@ -100,6 +102,8 @@ jobs:
           distribution: 'temurin'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: ui
 
       - name: Build JVM uber JAR
         working-directory: ui
