@@ -12,16 +12,16 @@ import org.hejnaluk.metrotimetable.ui.presentation.line.LineScreen
 import org.hejnaluk.metrotimetable.ui.presentation.station.StationScreen
 
 @Serializable
-private object LineRoute
+internal object LineRoute
 
 @Serializable
-private data class StationRoute(val lineId: String)
+internal data class StationRoute(val lineId: String)
 
 @Serializable
-private data class DirectionRoute(val lineId: String, val station: String)
+internal data class DirectionRoute(val lineId: String, val station: String)
 
 @Serializable
-private data class DeparturesRoute(
+internal data class DeparturesRoute(
     val lineId: String,
     val station: String,
     val directionId: Int,
