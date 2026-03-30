@@ -99,7 +99,7 @@ private fun DepartureItem(departure: TrainDeparture) {
     val departureInstant = Instant.parse(departure.departureTime)
     val minutesUntil = minutesUntil(departureInstant)
     val localTime = departureInstant
-        .toLocalDateTime(TimeZone.of("Europe/Prague")).time
+        .toLocalDateTime(TimeZone.currentSystemDefault()).time
 
     Card(
         modifier = Modifier
