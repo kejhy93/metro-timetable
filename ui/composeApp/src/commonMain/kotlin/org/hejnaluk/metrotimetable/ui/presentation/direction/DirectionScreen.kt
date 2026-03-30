@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import org.hejnaluk.metrotimetable.ui.data.local.LineDataSource
 import org.koin.compose.koinInject
 
+private const val DIRECTION_TERMINUS_0 = 1
+private const val DIRECTION_TERMINUS_1 = 0
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DirectionScreen(
@@ -48,13 +51,13 @@ fun DirectionScreen(
             if (line != null) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(1, line.terminus0) }
+                    onClick = { onDirectionSelected(DIRECTION_TERMINUS_0, line.terminus0) }
                 ) {
                     Text("→ ${line.terminus0}")
                 }
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(0, line.terminus1) }
+                    onClick = { onDirectionSelected(DIRECTION_TERMINUS_1, line.terminus1) }
                 ) {
                     Text("→ ${line.terminus1}")
                 }
