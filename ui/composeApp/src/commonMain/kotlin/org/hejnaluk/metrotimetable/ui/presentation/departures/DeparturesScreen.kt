@@ -23,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
@@ -132,6 +131,6 @@ private fun DepartureItem(departure: TrainDeparture) {
 }
 
 private fun minutesUntil(departure: Instant): Long {
-    val diff = departure - Clock.System.now()
+    val diff = departure - kotlin.time.Clock.System.now()
     return diff.inWholeMinutes
 }
