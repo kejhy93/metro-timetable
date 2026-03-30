@@ -233,10 +233,6 @@ git push origin v1.2.3
 
 The server deployment is indirect: the tag also triggers `docker-publish.yml` which builds and pushes the container image, and only once that succeeds does the `deploy` job roll it out to the cluster.
 
-### One-time setup
-
-Before the first release, enable GitHub Pages in repository Settings → Pages → Source → **GitHub Actions**.
-
 ### Version tag format
 
 Tags must match `v*.*.*` (e.g. `v1.0.0`, `v2.3.1`). Non-matching tags do not trigger any deployment.
