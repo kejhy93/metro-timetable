@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+git checkout main || { echo "ERROR: Failed to switch to main branch"; exit 1; }
+git pull origin main || { echo "ERROR: Failed to pull latest changes from origin/main"; exit 1; }
+
 latest=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
 
 if [ -z "$latest" ]; then
