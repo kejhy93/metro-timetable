@@ -202,15 +202,16 @@ public class ParseTimetableService {
         streamStopTimesIntoCache(stopsMap, tripToKey, newRouteCache);
 
         // Build station index: station name (lowercase) → cache key → stop position within a trip.
-        // Uses the first trip per key to determine stop positions (all trips share the same stop order).
+        // Uses the trip with the most stops per key to determine stop positions,
+        // since some trips do not stop at all stations.
         final Map<String, Map<String, Integer>> newStationIndex = new HashMap<>();
         for (Map.Entry<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> entry : newRouteCache.entrySet()) {
             final String key = entry.getKey();
             final var trips = entry.getValue();
             if (trips.isEmpty()) continue;
-            final List<CompleteStop> firstTrip = trips.firstEntry().getValue();
-            for (int i = 0; i < firstTrip.size(); i++) {
-                final String name = firstTrip.get(i).stop().stopName().toLowerCase();
+            final List<CompleteStop> referenceTrip = findTripWithMostStops(trips);
+            for (int i = 0; i < referenceTrip.size(); i++) {
+                final String name = referenceTrip.get(i).stop().stopName().toLowerCase();
                 newStationIndex.computeIfAbsent(name, k -> new HashMap<>()).put(key, i);
             }
         }
@@ -221,6 +222,12 @@ public class ParseTimetableService {
         cacheBuildTimeSample.stop(cacheBuildTimer);
         log.info("------------------------ CACHE DONE: {} route-direction keys, {} stations ------------------------",
                 newRouteCache.size(), newStationIndex.size());
+    }
+
+    private List<CompleteStop> findTripWithMostStops(ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips) {
+        return trips.values().stream()
+                .max(Comparator.comparingInt(List::size))
+                .orElseThrow();
     }
 
     /**
@@ -341,9 +348,9 @@ public class ParseTimetableService {
             stationIdx.put(e.getKey(), new HashMap<>(e.getValue()));
         }
         if (!trips.isEmpty()) {
-            final List<CompleteStop> firstTrip = trips.firstEntry().getValue();
-            for (int i = 0; i < firstTrip.size(); i++) {
-                final String name = firstTrip.get(i).stop().stopName().toLowerCase();
+            final List<CompleteStop> referenceTrip = findTripWithMostStops(trips);
+            for (int i = 0; i < referenceTrip.size(); i++) {
+                final String name = referenceTrip.get(i).stop().stopName().toLowerCase();
                 stationIdx.computeIfAbsent(name, k -> new HashMap<>()).put(key, i);
             }
         }
