@@ -212,7 +212,6 @@ public class ParseTimetableService {
             final List<CompleteStop> referenceTrip = findTripWithMostStops(trips);
             for (int i = 0; i < referenceTrip.size(); i++) {
                 final String name = referenceTrip.get(i).stop().stopName().toLowerCase();
-                log.info("Station name: {}, line: {}", name, key);
                 newStationIndex.computeIfAbsent(name, k -> new HashMap<>()).put(key, i);
             }
         }
