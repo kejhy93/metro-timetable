@@ -171,6 +171,23 @@ class ParseTimetableServiceTest {
         assertThat(departure.destination()).isEqualTo("Zličín");
     }
 
+    @Test
+    void stationIndex_usesLongestTrip_notFirstEntry() {
+        // Trip at 12:01 is firstEntry (earliest) but has only 1 stop — "Muzeum" is absent.
+        // Trip at 14:00 has the most stops and includes "Muzeum" at index 1.
+        // The station index must be built from the longer trip so "Muzeum" is reachable.
+        // With the old firstEntry() approach, "Muzeum" would never be indexed.
+        populateCache("L991-0", Map.of(
+                LocalTime.of(12, 1), stopsAt(LocalTime.of(12, 1), "Depo Hostivař"),
+                LocalTime.of(14, 0), stopsAt(LocalTime.of(14, 0), "Depo Hostivař", "Muzeum", "Skalka", "Zličín")
+        ));
+
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().upcomingStations()).containsExactly("Muzeum", "Skalka", "Zličín");
+    }
+
     // --- helpers ---
 
     /** Builds stops with departure times starting at baseTime, incrementing by 1 minute each stop. */
