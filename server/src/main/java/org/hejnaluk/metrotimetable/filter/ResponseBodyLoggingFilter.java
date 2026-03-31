@@ -19,6 +19,14 @@ public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
     private static final int MAX_BODY_LOG_LENGTH = 2000;
 
     @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        return uri.startsWith("/actuator/health")
+                || uri.startsWith("/actuator/prometheus")
+                || uri.startsWith("/actuator");
+    }
+
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         ContentCachingResponseWrapper wrappedResponse = new ContentCachingResponseWrapper(response);
