@@ -272,26 +272,21 @@ class ParseTimetableServiceTest {
         assertThat(result).doesNotContain("ADDED_NEXT_DAY");
     }
 
-    // --- parseTrip integration tests (reads from /tmp/timetable/) ---
+    // --- parseTrip tests ---
 
     @Test
     void parseTrip_emptyServiceIds_returnsEmpty() {
-        ParseTimetableService integrationService = new ParseTimetableService(new SimpleMeterRegistry(), Set.of("L991")) {
-        };
-
-        List<ParseTimetableService.Trip> result = integrationService.parseTrip(Set.of("L991"), Set.of());
+        List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of());
 
         assertThat(result).isEmpty();
     }
 
     @Test
-    void parseTrip_withActiveServiceId_returnsTripsForRoute() {
-        ParseTimetableService integrationService = new ParseTimetableService(new SimpleMeterRegistry(), Set.of("L991")) {
-        };
+    void parseTrip_withActiveServiceId_returnsOnlyMatchingRouteAndService() {
+        // trips.txt fixture has 2 L991 trips with 1111100-1 and 1 with 1111111-1, plus 1 L992 trip
+        List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of("1111100-1"));
 
-        List<ParseTimetableService.Trip> result = integrationService.parseTrip(Set.of("L991"), Set.of("1111100-1"));
-
-        assertThat(result).isNotEmpty();
+        assertThat(result).hasSize(2);
         assertThat(result).allMatch(t -> t.routeId().equals("L991"));
     }
 
