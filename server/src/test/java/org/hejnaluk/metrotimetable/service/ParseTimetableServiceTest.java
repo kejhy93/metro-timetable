@@ -2,19 +2,15 @@ package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,14 +24,21 @@ class ParseTimetableServiceTest {
     private static final LocalDate FIXED_TODAY = LocalDate.of(2026, 4, 2); // Wednesday
     private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
+    private static final Path FIXTURE_DIR = fixtureDir();
+
+    private static Path fixtureDir() {
+        try {
+            return Path.of(ParseTimetableServiceTest.class.getClassLoader()
+                    .getResource("timetable").toURI());
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException("Cannot resolve timetable fixture directory", e);
+        }
+    }
+
     private ParseTimetableService service;
-    private Path tempDir;
 
     @BeforeEach
     void setUp() throws Exception {
-        tempDir = Files.createTempDirectory("timetable-test-");
-        writeCalendarFixtures(tempDir);
-
         service = new ParseTimetableService(new SimpleMeterRegistry(), Set.of()) {
             @Override
             protected LocalTime getNow() {
@@ -49,18 +52,11 @@ class ParseTimetableServiceTest {
 
             @Override
             protected Path getRootPath() {
-                return tempDir;
+                return FIXTURE_DIR;
             }
         };
         setMaxLimit(service, 15);
         service.resetForTest();
-    }
-
-    @AfterEach
-    void tearDown() throws Exception {
-        try (var stream = Files.walk(tempDir).sorted(Comparator.reverseOrder())) {
-            stream.forEach(p -> p.toFile().delete());
-        }
     }
 
     // --- getTrainsForStation tests ---
@@ -327,36 +323,4 @@ class ParseTimetableServiceTest {
         field.set(svc, value);
     }
 
-    /**
-     * Writes calendar.txt and calendar_dates.txt fixture files into the given directory.
-     *
-     * calendar.txt services:
-     *   MON_FRI      — Mon–Fri, 2026-04-01 to 2026-04-30  (active on Wednesday 2026-04-02)
-     *   SAT_SUN      — Sat–Sun, 2026-04-01 to 2026-04-30  (not active on Wednesday)
-     *   FUTURE_SVC   — Mon–Fri, starts 2026-05-01          (not yet active on 2026-04-02)
-     *   PAST_SVC     — Mon–Fri, ended 2026-03-31            (expired before 2026-04-02)
-     *   ALWAYS_ACTIVE — every day, 2026-04-01 to 2026-04-30 (removed by exception on 2026-04-02)
-     *   NOT_ON_DATE  — no weekday flags set                 (never active by schedule)
-     *
-     * calendar_dates.txt exceptions for 2026-04-02:
-     *   NEW_EXCEPTION,20260402,1    → added (not in base schedule)
-     *   ALWAYS_ACTIVE,20260402,2    → removed (was active by schedule)
-     *   ADDED_NEXT_DAY,20260403,1   → different date, no effect on 2026-04-02
-     */
-    private static void writeCalendarFixtures(Path dir) throws IOException {
-        Files.writeString(dir.resolve("calendar.txt"),
-                "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n" +
-                "MON_FRI,1,1,1,1,1,0,0,20260401,20260430\n" +
-                "SAT_SUN,0,0,0,0,0,1,1,20260401,20260430\n" +
-                "FUTURE_SVC,1,1,1,1,1,0,0,20260501,20260531\n" +
-                "PAST_SVC,1,1,1,1,1,0,0,20260301,20260331\n" +
-                "ALWAYS_ACTIVE,1,1,1,1,1,1,1,20260401,20260430\n" +
-                "NOT_ON_DATE,0,0,0,0,0,0,0,20260401,20260430\n");
-
-        Files.writeString(dir.resolve("calendar_dates.txt"),
-                "service_id,date,exception_type\n" +
-                "NEW_EXCEPTION,20260402,1\n" +
-                "ALWAYS_ACTIVE,20260402,2\n" +
-                "ADDED_NEXT_DAY,20260403,1\n");
-    }
 }
