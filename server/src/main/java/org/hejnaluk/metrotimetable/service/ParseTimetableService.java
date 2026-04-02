@@ -145,6 +145,12 @@ public class ParseTimetableService {
     public static final int CALENDAR_DATES_SERVICE_ID = 0;
     public static final int CALENDAR_DATES_DATE = 1;
     public static final int CALENDAR_DATES_EXCEPTION_TYPE = 2;
+    /** GTFS {@code calendar.txt} weekday flag value meaning the service runs on that day. */
+    public static final String CALENDAR_DAY_ACTIVE = "1";
+    /** GTFS {@code calendar_dates.txt} exception_type: service added on this date. */
+    public static final String CALENDAR_DATES_EXCEPTION_ADDED = "1";
+    /** GTFS {@code calendar_dates.txt} exception_type: service removed on this date. */
+    public static final String CALENDAR_DATES_EXCEPTION_REMOVED = "2";
 
     public static final String DELIMITER = ",";
     public static final String ERROR_READING_FILE_ERROR_MESSAGE = "Error reading file: {}";
@@ -647,8 +653,9 @@ public class ParseTimetableService {
      * Pass 2 — {@code calendar_dates.txt}: rows matching {@code today} are applied:
      * {@code exception_type=1} adds a service ID, {@code exception_type=2} removes one.
      * <p>
-     * On {@link IOException}, logs the error and returns an empty set (fail-closed: an empty
-     * timetable is safer than showing trips from the wrong service day).
+     * On {@link IOException} in pass 1, logs the error and returns an empty set (fail-closed).
+     * On {@link IOException} in pass 2, logs the error and returns the base schedule from pass 1
+     * rather than blanking the timetable entirely.
      *
      * @param today the service date to evaluate
      * @return an unmodifiable set of active service IDs
@@ -665,7 +672,7 @@ public class ParseTimetableService {
                         final LocalDate end = LocalDate.parse(parts[CALENDAR_END_DATE], GTFS_DATE_FORMATTER);
                         if (today.isBefore(start) || today.isAfter(end)) return false;
                         final int dayFlagCol = CALENDAR_MONDAY + today.getDayOfWeek().getValue() - 1;
-                        return "1".equals(parts[dayFlagCol]);
+                        return CALENDAR_DAY_ACTIVE.equals(parts[dayFlagCol]);
                     })
                     .map(parts -> parts[CALENDAR_SERVICE_ID])
                     .forEach(activeIds::add);
@@ -680,15 +687,15 @@ public class ParseTimetableService {
                     .map(line -> line.split(DELIMITER, CALENDAR_DATES_EXCEPTION_TYPE + 2))
                     .filter(parts -> LocalDate.parse(parts[CALENDAR_DATES_DATE], GTFS_DATE_FORMATTER).equals(today))
                     .forEach(parts -> {
-                        if ("1".equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
+                        if (CALENDAR_DATES_EXCEPTION_ADDED.equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
                             activeIds.add(parts[CALENDAR_DATES_SERVICE_ID]);
-                        } else if ("2".equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
+                        } else if (CALENDAR_DATES_EXCEPTION_REMOVED.equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
                             activeIds.remove(parts[CALENDAR_DATES_SERVICE_ID]);
                         }
                     });
         } catch (IOException e) {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, CALENDAR_DATES_FILE_NAME, e);
-            return Set.of();
+            // calendar_dates.txt is unavailable; return the base schedule from calendar.txt rather than blanking the timetable.
         }
 
         return Collections.unmodifiableSet(activeIds);
