@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -668,16 +669,25 @@ public class ParseTimetableService {
             lines.skip(1) // skip header row
                     .map(line -> line.split(DELIMITER, CALENDAR_END_DATE + 2))
                     .filter(parts -> {
-                        final LocalDate start = LocalDate.parse(parts[CALENDAR_START_DATE], GTFS_DATE_FORMATTER);
-                        final LocalDate end = LocalDate.parse(parts[CALENDAR_END_DATE], GTFS_DATE_FORMATTER);
-                        if (today.isBefore(start) || today.isAfter(end)) return false;
-                        final int dayFlagCol = CALENDAR_MONDAY + today.getDayOfWeek().getValue() - 1;
-                        return CALENDAR_DAY_ACTIVE.equals(parts[dayFlagCol]);
+                        if (parts.length <= CALENDAR_END_DATE) {
+                            log.warn("Skipping malformed row in {}: expected >{} columns, got {}", CALENDAR_FILE_NAME, CALENDAR_END_DATE, parts.length);
+                            return false;
+                        }
+                        try {
+                            final LocalDate start = LocalDate.parse(parts[CALENDAR_START_DATE], GTFS_DATE_FORMATTER);
+                            final LocalDate end = LocalDate.parse(parts[CALENDAR_END_DATE], GTFS_DATE_FORMATTER);
+                            if (today.isBefore(start) || today.isAfter(end)) return false;
+                            final int dayFlagCol = CALENDAR_MONDAY + today.getDayOfWeek().getValue() - 1;
+                            return CALENDAR_DAY_ACTIVE.equals(parts[dayFlagCol]);
+                        } catch (DateTimeParseException e) {
+                            log.warn("Skipping malformed row in {}: invalid date — {}", CALENDAR_FILE_NAME, e.getMessage());
+                            return false;
+                        }
                     })
                     .map(parts -> parts[CALENDAR_SERVICE_ID])
                     .forEach(activeIds::add);
         } catch (IOException e) {
-            log.error(ERROR_READING_FILE_ERROR_MESSAGE, CALENDAR_FILE_NAME, e);
+            log.error("Error reading {}: active service IDs for {} cannot be determined; no trips will be served", CALENDAR_FILE_NAME, today, e);
             return Set.of();
         }
 
@@ -685,7 +695,18 @@ public class ParseTimetableService {
         try (Stream<String> lines = Files.lines(getRootPath().resolve(CALENDAR_DATES_FILE_NAME))) {
             lines.skip(1) // skip header row
                     .map(line -> line.split(DELIMITER, CALENDAR_DATES_EXCEPTION_TYPE + 2))
-                    .filter(parts -> LocalDate.parse(parts[CALENDAR_DATES_DATE], GTFS_DATE_FORMATTER).equals(today))
+                    .filter(parts -> {
+                        if (parts.length <= CALENDAR_DATES_EXCEPTION_TYPE) {
+                            log.warn("Skipping malformed row in {}: expected >{} columns, got {}", CALENDAR_DATES_FILE_NAME, CALENDAR_DATES_EXCEPTION_TYPE, parts.length);
+                            return false;
+                        }
+                        try {
+                            return LocalDate.parse(parts[CALENDAR_DATES_DATE], GTFS_DATE_FORMATTER).equals(today);
+                        } catch (DateTimeParseException e) {
+                            log.warn("Skipping malformed row in {}: invalid date — {}", CALENDAR_DATES_FILE_NAME, e.getMessage());
+                            return false;
+                        }
+                    })
                     .forEach(parts -> {
                         if (CALENDAR_DATES_EXCEPTION_ADDED.equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
                             activeIds.add(parts[CALENDAR_DATES_SERVICE_ID]);
