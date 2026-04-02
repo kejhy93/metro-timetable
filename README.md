@@ -13,7 +13,7 @@ This repository contains a Java-based application that provides metro timetable 
 ## Features
 
 - Fetches and parses Prague PID GTFS timetable data automatically.
-- Filters trips by active service IDs for today's date using `calendar.txt` (weekly schedule) and `calendar_dates.txt` (public holiday and exception overrides), so only trips scheduled to run today appear in results.
+- Filters trips by active service IDs for today's date using `calendar.txt` (weekly schedule) and `calendar_dates.txt` (public holidays and exception overrides), so only trips scheduled to run today appear in results.
 - Queries upcoming train departures by station name with optional direction filtering.
 - Caches parsed data in-memory; re-downloads only when the data is older than a configurable threshold.
 - Exposes Prometheus metrics for observability.
