@@ -4,8 +4,12 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
-import java.time.Instant;
+import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -19,7 +23,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ParseTimetableServiceTest {
 
     private static final LocalTime FIXED_NOW = LocalTime.of(12, 0);
+    private static final LocalDate FIXED_TODAY = LocalDate.of(2026, 4, 2); // Wednesday
     private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
+
+    private static final Path FIXTURE_DIR = fixtureDir();
+
+    private static Path fixtureDir() {
+        try {
+            return Path.of(ParseTimetableServiceTest.class.getClassLoader()
+                    .getResource("timetable").toURI());
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException("Cannot resolve timetable fixture directory", e);
+        }
+    }
 
     private ParseTimetableService service;
 
@@ -30,10 +46,22 @@ class ParseTimetableServiceTest {
             protected LocalTime getNow() {
                 return FIXED_NOW;
             }
+
+            @Override
+            protected LocalDate getToday() {
+                return FIXED_TODAY;
+            }
+
+            @Override
+            protected Path getRootPath() {
+                return FIXTURE_DIR;
+            }
         };
         setMaxLimit(service, 15);
         service.resetForTest();
     }
+
+    // --- getTrainsForStation tests ---
 
     @Test
     void returnsUpcomingTrainsForStation() {
@@ -188,6 +216,46 @@ class ParseTimetableServiceTest {
         assertThat(result.getFirst().upcomingStations()).containsExactly("Muzeum", "Skalka", "Zličín");
     }
 
+    // --- parseActiveServiceIds tests ---
+
+    @ParameterizedTest(name = "{2}")
+    @CsvSource({
+        // serviceId, expectedPresent, description
+        "MON_FRI,      true,  MON_FRI included on Wednesday (weekday flags match)",
+        "SAT_SUN,      false, SAT_SUN excluded on Wednesday (weekend-only flags)",
+        "FUTURE_SVC,   false, FUTURE_SVC excluded before its start date 2026-05-01",
+        "PAST_SVC,     false, PAST_SVC excluded after its end date 2026-03-31",
+        "NEW_EXCEPTION, true, NEW_EXCEPTION added via exception_type=1 on 2026-04-02",
+        "ALWAYS_ACTIVE, false, ALWAYS_ACTIVE removed via exception_type=2 on 2026-04-02",
+        "ADDED_NEXT_DAY, false, ADDED_NEXT_DAY exception_type=1 is for 2026-04-03 not today",
+    })
+    void activeServiceIds(String serviceId, boolean expectedPresent, String description) {
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        if (expectedPresent) {
+            assertThat(result).contains(serviceId);
+        } else {
+            assertThat(result).doesNotContain(serviceId);
+        }
+    }
+
+    // --- parseTrip tests ---
+
+    @Test
+    void parseTrip_emptyServiceIds_returnsEmpty() {
+        List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseTrip_withActiveServiceId_returnsOnlyMatchingRouteAndService() {
+        // trips.txt fixture has 2 L991 trips with 1111100-1 and 1 with 1111111-1, plus 1 L992 trip
+        List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of("1111100-1"));
+
+        assertThat(result).hasSize(2).allMatch(t -> t.routeId().equals("L991"));
+    }
+
     // --- helpers ---
 
     /** Builds stops with departure times starting at baseTime, incrementing by 1 minute each stop. */
@@ -215,4 +283,5 @@ class ParseTimetableServiceTest {
         field.setAccessible(true);
         field.set(svc, value);
     }
+
 }

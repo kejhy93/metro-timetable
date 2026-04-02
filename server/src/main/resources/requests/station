@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 ENV=${1:-local}
+STATION=${2:-}
+DIRECTION=${3:-}
+LIMIT=${4:-}
 
 case "$ENV" in
   local)
@@ -20,25 +23,32 @@ case "$ENV" in
   *) echo "Unknown env: $ENV. Use local|dev|test|prod."; exit 1 ;;
 esac
 
-request() {
-  local body="$1"
-  local response http_code resp_body
-  response=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/pid/station" \
-    -H "Content-Type: application/json" \
-    -d "$body")
-  http_code=$(echo "$response" | tail -1)
-  resp_body=$(echo "$response" | head -n -1)
-  echo "HTTP $http_code"
-  echo "$resp_body" | jq .
+STATIONS=(
+  "Muzeum" "Stodůlky" "Florenc" "Můstek" "Náměstí Míru"
+  "Hradčanská" "Dejvická" "Zličín" "Letňany" "Černý Most"
+  "Chodov" "Háje" "Budějovická" "Pankrác" "Anděl"
+)
+
+if [ -z "$STATION" ]; then
+  STATION="${STATIONS[$RANDOM % ${#STATIONS[@]}]}"
+  echo "Random station: $STATION"
+fi
+
+build_body() {
+  local body="{\"station\": \"$STATION\""
+  [ -n "$DIRECTION" ] && body+=", \"direction\": $DIRECTION"
+  [ -n "$LIMIT" ] && body+=", \"limit\": $LIMIT"
+  body+="}"
+  echo "$body"
 }
 
-echo "=== All directions, default limit ==="
-request '{"station": "Muzeum"}'
+BODY=$(build_body)
+echo "Request: $BODY"
 
-echo ""
-echo "=== Direction 0 only ==="
-request '{"station": "Muzeum", "direction": 0}'
-
-echo ""
-echo "=== Direction 0, limit 3 ==="
-request '{"station": "Muzeum", "direction": 0, "limit": 3}'
+response=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/pid/station" \
+  -H "Content-Type: application/json" \
+  -d "$BODY")
+http_code=$(echo "$response" | tail -1)
+resp_body=$(echo "$response" | head -n -1)
+echo "HTTP $http_code"
+echo "$resp_body" | jq .
