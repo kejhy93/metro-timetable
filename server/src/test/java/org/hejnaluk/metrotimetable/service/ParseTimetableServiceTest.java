@@ -4,6 +4,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -216,60 +218,25 @@ class ParseTimetableServiceTest {
 
     // --- parseActiveServiceIds tests ---
 
-    @Test
-    void activeServiceIds_includesWeekdayService_onWednesday() {
-        // MON_FRI has monday–friday=1, today is Wednesday (FIXED_TODAY 2026-04-02) → included
+    @ParameterizedTest(name = "{2}")
+    @CsvSource({
+        // serviceId, expectedPresent, description
+        "MON_FRI,      true,  MON_FRI included on Wednesday (weekday flags match)",
+        "SAT_SUN,      false, SAT_SUN excluded on Wednesday (weekend-only flags)",
+        "FUTURE_SVC,   false, FUTURE_SVC excluded before its start date 2026-05-01",
+        "PAST_SVC,     false, PAST_SVC excluded after its end date 2026-03-31",
+        "NEW_EXCEPTION, true, NEW_EXCEPTION added via exception_type=1 on 2026-04-02",
+        "ALWAYS_ACTIVE, false, ALWAYS_ACTIVE removed via exception_type=2 on 2026-04-02",
+        "ADDED_NEXT_DAY, false, ADDED_NEXT_DAY exception_type=1 is for 2026-04-03 not today",
+    })
+    void activeServiceIds(String serviceId, boolean expectedPresent, String description) {
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).contains("MON_FRI");
-    }
-
-    @Test
-    void activeServiceIds_excludesWeekendService_onWednesday() {
-        // SAT_SUN has saturday=sunday=1 only, Wednesday flag is 0 → excluded
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).isNotEmpty().doesNotContain("SAT_SUN");
-    }
-
-    @Test
-    void activeServiceIds_excludesService_beforeStartDate() {
-        // FUTURE_SVC starts 2026-05-01, today is 2026-04-02 → excluded
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).isNotEmpty().doesNotContain("FUTURE_SVC");
-    }
-
-    @Test
-    void activeServiceIds_excludesService_afterEndDate() {
-        // PAST_SVC ended 2026-03-31, today is 2026-04-02 → excluded
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).isNotEmpty().doesNotContain("PAST_SVC");
-    }
-
-    @Test
-    void activeServiceIds_addsService_viaExceptionType1() {
-        // NEW_EXCEPTION has zero weekday flags in calendar.txt but is added by exception_type=1 on 2026-04-02
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).contains("NEW_EXCEPTION");
-    }
-
-    @Test
-    void activeServiceIds_removesService_viaExceptionType2_publicHoliday() {
-        // ALWAYS_ACTIVE runs every day in calendar.txt but is removed by exception_type=2 on 2026-04-02
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).isNotEmpty().doesNotContain("ALWAYS_ACTIVE");
-    }
-
-    @Test
-    void activeServiceIds_ignoresExceptionRow_forDifferentDate() {
-        // ADDED_NEXT_DAY has an exception_type=1 row for 2026-04-03 (not today) → not added today
-        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
-
-        assertThat(result).isNotEmpty().doesNotContain("ADDED_NEXT_DAY");
+        if (expectedPresent) {
+            assertThat(result).contains(serviceId);
+        } else {
+            assertThat(result).doesNotContain(serviceId);
+        }
     }
 
     // --- parseTrip tests ---
