@@ -120,16 +120,38 @@ public class ParseTimetableService {
      * Columns key for trips.txt
      */
     public static final int TRIP_ROUTE_ID = 0;
+    public static final int TRIP_SERVICE_ID = 1;
     public static final int TRIP_TRIP_ID = 2;
     public static final int TRIP_TRIP_HEADSIGN = 3;
     public static final int TRIP_TRIP_SHORT_NAME = 4;
     public static final int TRIP_DIRECTION_ID = 5;
+
+    /**
+     * format:
+     * service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date
+     */
+    public static final String CALENDAR_FILE_NAME = "calendar.txt";
+    public static final int CALENDAR_SERVICE_ID = 0;
+    /** Column index of Monday flag; Tuesday=2, …, Sunday=7 (Mon–Sun maps to getValue() 1–7). */
+    public static final int CALENDAR_MONDAY = 1;
+    public static final int CALENDAR_START_DATE = 8;
+    public static final int CALENDAR_END_DATE = 9;
+
+    /**
+     * format:
+     * service_id,date,exception_type
+     */
+    public static final String CALENDAR_DATES_FILE_NAME = "calendar_dates.txt";
+    public static final int CALENDAR_DATES_SERVICE_ID = 0;
+    public static final int CALENDAR_DATES_DATE = 1;
+    public static final int CALENDAR_DATES_EXCEPTION_TYPE = 2;
 
     public static final String DELIMITER = ",";
     public static final String ERROR_READING_FILE_ERROR_MESSAGE = "Error reading file: {}";
     public static final String NEW_LINE_AND_TAB = "\n\t";
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter GTFS_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
     /**
@@ -168,9 +190,11 @@ public class ParseTimetableService {
                 .register(meterRegistry);
         io.micrometer.core.instrument.Timer.Sample fileParseTimeSample = Timer.start();
 
-        // Phase 1: Parse route stop IDs (filtered by routeIds) + trips in parallel
+        // Phase 1: Determine active services synchronously (two small files, ~ms),
+        // then parse route stop IDs and trips in parallel.
+        final Set<String> activeServiceIds = parseActiveServiceIds(getToday());
         final var neededStopIdsFuture = CompletableFuture.supplyAsync(this::parseRouteStopIds);
-        final var tripFuture = CompletableFuture.supplyAsync(() -> parseTrip(routeIds));
+        final var tripFuture = CompletableFuture.supplyAsync(() -> parseTrip(routeIds, activeServiceIds));
         CompletableFuture.allOf(neededStopIdsFuture, tripFuture).join();
 
         final var neededStopIds = neededStopIdsFuture.join();
@@ -241,6 +265,24 @@ public class ParseTimetableService {
     }
 
     /**
+     * Returns today's date in Prague time. Overridable in tests to control the clock.
+     *
+     * @return today's {@link LocalDate} in Europe/Prague
+     */
+    protected LocalDate getToday() {
+        return LocalDate.now(PRAGUE_ZONE);
+    }
+
+    /**
+     * Returns the root path where GTFS files are stored. Overridable in tests to point at fixtures.
+     *
+     * @return path to the directory containing the GTFS text files
+     */
+    protected Path getRootPath() {
+        return Path.of(ROOT_PATH_FILE);
+    }
+
+    /**
      * Returns upcoming train departures from the given station.
      * <p>
      * Looks up the station in the station index for O(1) access, then collects departures
@@ -306,7 +348,7 @@ public class ParseTimetableService {
         //  Around midnight, these trips should use the previous day's service date rather than today.
         //  A proper fix requires threading the service date (from calendar.txt/calendar_dates.txt)
         //  through the data model.
-        final LocalDate today = LocalDate.now(PRAGUE_ZONE);
+        final LocalDate today = getToday();
         return trips.values().stream()
                 .filter(stops -> stopIndex < stops.size())
                 .filter(stops -> !stops.get(stopIndex).departureTime().isBefore(now))
@@ -399,17 +441,18 @@ public class ParseTimetableService {
      * @param routeIds A set of route IDs to filter the trips.
      * @return A list of Trip objects parsed from the `trips.txt` file.
      */
-    private List<Trip> parseTrip(Set<String> routeIds) {
-        try (Stream<String> lines = Files.lines(Path.of(ROOT_PATH_FILE, TRIP_FILE_NAME))) {
+    List<Trip> parseTrip(Set<String> routeIds, Set<String> activeServiceIds) {
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(TRIP_FILE_NAME))) {
             return lines
                     .map(line -> line.split(DELIMITER, TRIP_DIRECTION_ID + 2))
-                    .filter(line -> routeIds.contains(line[TRIP_ROUTE_ID]))
-                    .map(line -> Trip.builder()
-                            .routeId(line[TRIP_ROUTE_ID])
-                            .tripId(line[TRIP_TRIP_ID])
-                            .tripHeadsign(line[TRIP_TRIP_HEADSIGN])
-                            .tripShortName(line[TRIP_TRIP_SHORT_NAME])
-                            .directionId(line[TRIP_DIRECTION_ID])
+                    .filter(parts -> routeIds.contains(parts[TRIP_ROUTE_ID]))
+                    .filter(parts -> activeServiceIds.contains(parts[TRIP_SERVICE_ID]))
+                    .map(parts -> Trip.builder()
+                            .routeId(parts[TRIP_ROUTE_ID])
+                            .tripId(parts[TRIP_TRIP_ID])
+                            .tripHeadsign(parts[TRIP_TRIP_HEADSIGN])
+                            .tripShortName(parts[TRIP_TRIP_SHORT_NAME])
+                            .directionId(parts[TRIP_DIRECTION_ID])
                             .build())
                     .toList();
         } catch (IOException e) {
@@ -434,7 +477,7 @@ public class ParseTimetableService {
             Map<String, Stop> stopsMap,
             Map<String, String> tripToKey,
             Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> cache) {
-        try (BufferedReader reader = Files.newBufferedReader(Path.of(ROOT_PATH_FILE, STOP_TIME_FILE_NAME))) {
+        try (BufferedReader reader = Files.newBufferedReader(getRootPath().resolve(STOP_TIME_FILE_NAME))) {
             String headerLine = reader.readLine();
             if (headerLine == null)
                 return; // skip header; empty file → nothing to parse
@@ -554,7 +597,7 @@ public class ParseTimetableService {
      * @return All parsed stops keyed by stopId.
      */
     private Map<String, Stop> parseStops(Set<String> neededStopIds) {
-        try (Stream<String> lines = Files.lines(Path.of(ROOT_PATH_FILE, STOPS_FILE_NAME))) {
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(STOPS_FILE_NAME))) {
             return lines
                     .map(line -> line.split(DELIMITER, STOPS_STOP_NAME + 2))
                     .filter(line -> neededStopIds.contains(line[STOPS_STOP_ID]))
@@ -582,7 +625,7 @@ public class ParseTimetableService {
      * @return the set of stop IDs referenced by the configured routes
      */
     private Set<String> parseRouteStopIds() {
-        try (Stream<String> lines = Files.lines(Path.of(ROOT_PATH_FILE, ROUTE_STOPS_FILE_NAME))) {
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(ROUTE_STOPS_FILE_NAME))) {
             return lines
                     .map(line -> line.split(DELIMITER, ROUTE_STOP_STOP_ID + 2))
                     .filter(line -> routeIds.contains(line[ROUTE_STOP_ROUTE_ID]))
@@ -592,6 +635,63 @@ public class ParseTimetableService {
             log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTE_STOPS_FILE_NAME, e);
             return Set.of();
         }
+    }
+
+    /**
+     * Determines which service IDs are active on the given date by reading {@code calendar.txt}
+     * and applying overrides from {@code calendar_dates.txt}.
+     * <p>
+     * Pass 1 — {@code calendar.txt}: a service is included if {@code today} falls within its
+     * {@code [start_date, end_date]} range and the weekday flag for {@code today} is {@code "1"}.
+     * <p>
+     * Pass 2 — {@code calendar_dates.txt}: rows matching {@code today} are applied:
+     * {@code exception_type=1} adds a service ID, {@code exception_type=2} removes one.
+     * <p>
+     * On {@link IOException}, logs the error and returns an empty set (fail-closed: an empty
+     * timetable is safer than showing trips from the wrong service day).
+     *
+     * @param today the service date to evaluate
+     * @return an unmodifiable set of active service IDs
+     */
+    Set<String> parseActiveServiceIds(LocalDate today) {
+        final Set<String> activeIds = new HashSet<>();
+
+        // Pass 1: calendar.txt — base schedule
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(CALENDAR_FILE_NAME))) {
+            lines.skip(1) // skip header row
+                    .map(line -> line.split(DELIMITER, CALENDAR_END_DATE + 2))
+                    .filter(parts -> {
+                        final LocalDate start = LocalDate.parse(parts[CALENDAR_START_DATE], GTFS_DATE_FORMATTER);
+                        final LocalDate end = LocalDate.parse(parts[CALENDAR_END_DATE], GTFS_DATE_FORMATTER);
+                        if (today.isBefore(start) || today.isAfter(end)) return false;
+                        final int dayFlagCol = CALENDAR_MONDAY + today.getDayOfWeek().getValue() - 1;
+                        return "1".equals(parts[dayFlagCol]);
+                    })
+                    .map(parts -> parts[CALENDAR_SERVICE_ID])
+                    .forEach(activeIds::add);
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, CALENDAR_FILE_NAME, e);
+            return Set.of();
+        }
+
+        // Pass 2: calendar_dates.txt — exceptions (added services and public holidays)
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(CALENDAR_DATES_FILE_NAME))) {
+            lines.skip(1) // skip header row
+                    .map(line -> line.split(DELIMITER, CALENDAR_DATES_EXCEPTION_TYPE + 2))
+                    .filter(parts -> LocalDate.parse(parts[CALENDAR_DATES_DATE], GTFS_DATE_FORMATTER).equals(today))
+                    .forEach(parts -> {
+                        if ("1".equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
+                            activeIds.add(parts[CALENDAR_DATES_SERVICE_ID]);
+                        } else if ("2".equals(parts[CALENDAR_DATES_EXCEPTION_TYPE])) {
+                            activeIds.remove(parts[CALENDAR_DATES_SERVICE_ID]);
+                        }
+                    });
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, CALENDAR_DATES_FILE_NAME, e);
+            return Set.of();
+        }
+
+        return Collections.unmodifiableSet(activeIds);
     }
 
     @Builder

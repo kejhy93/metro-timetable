@@ -2,13 +2,19 @@ package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,21 +25,45 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ParseTimetableServiceTest {
 
     private static final LocalTime FIXED_NOW = LocalTime.of(12, 0);
+    private static final LocalDate FIXED_TODAY = LocalDate.of(2026, 4, 2); // Wednesday
     private static final ZoneId PRAGUE_ZONE = ZoneId.of("Europe/Prague");
 
     private ParseTimetableService service;
+    private Path tempDir;
 
     @BeforeEach
     void setUp() throws Exception {
+        tempDir = Files.createTempDirectory("timetable-test-");
+        writeCalendarFixtures(tempDir);
+
         service = new ParseTimetableService(new SimpleMeterRegistry(), Set.of()) {
             @Override
             protected LocalTime getNow() {
                 return FIXED_NOW;
             }
+
+            @Override
+            protected LocalDate getToday() {
+                return FIXED_TODAY;
+            }
+
+            @Override
+            protected Path getRootPath() {
+                return tempDir;
+            }
         };
         setMaxLimit(service, 15);
         service.resetForTest();
     }
+
+    @AfterEach
+    void tearDown() throws Exception {
+        try (var stream = Files.walk(tempDir).sorted(Comparator.reverseOrder())) {
+            stream.forEach(p -> p.toFile().delete());
+        }
+    }
+
+    // --- getTrainsForStation tests ---
 
     @Test
     void returnsUpcomingTrainsForStation() {
@@ -188,6 +218,87 @@ class ParseTimetableServiceTest {
         assertThat(result.getFirst().upcomingStations()).containsExactly("Muzeum", "Skalka", "Zličín");
     }
 
+    // --- parseActiveServiceIds tests ---
+
+    @Test
+    void activeServiceIds_includesWeekdayService_onWednesday() {
+        // MON_FRI has monday–friday=1, today is Wednesday (FIXED_TODAY 2026-04-02) → included
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).contains("MON_FRI");
+    }
+
+    @Test
+    void activeServiceIds_excludesWeekendService_onWednesday() {
+        // SAT_SUN has saturday=sunday=1 only, Wednesday flag is 0 → excluded
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).doesNotContain("SAT_SUN");
+    }
+
+    @Test
+    void activeServiceIds_excludesService_beforeStartDate() {
+        // FUTURE_SVC starts 2026-05-01, today is 2026-04-02 → excluded
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).doesNotContain("FUTURE_SVC");
+    }
+
+    @Test
+    void activeServiceIds_excludesService_afterEndDate() {
+        // PAST_SVC ended 2026-03-31, today is 2026-04-02 → excluded
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).doesNotContain("PAST_SVC");
+    }
+
+    @Test
+    void activeServiceIds_addsService_viaExceptionType1() {
+        // NEW_EXCEPTION has zero weekday flags in calendar.txt but is added by exception_type=1 on 2026-04-02
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).contains("NEW_EXCEPTION");
+    }
+
+    @Test
+    void activeServiceIds_removesService_viaExceptionType2_publicHoliday() {
+        // ALWAYS_ACTIVE runs every day in calendar.txt but is removed by exception_type=2 on 2026-04-02
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).doesNotContain("ALWAYS_ACTIVE");
+    }
+
+    @Test
+    void activeServiceIds_ignoresExceptionRow_forDifferentDate() {
+        // ADDED_NEXT_DAY has an exception_type=1 row for 2026-04-03 (not today) → not added today
+        Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
+
+        assertThat(result).doesNotContain("ADDED_NEXT_DAY");
+    }
+
+    // --- parseTrip integration tests (reads from /tmp/timetable/) ---
+
+    @Test
+    void parseTrip_emptyServiceIds_returnsEmpty() {
+        ParseTimetableService integrationService = new ParseTimetableService(new SimpleMeterRegistry(), Set.of("L991")) {
+        };
+
+        List<ParseTimetableService.Trip> result = integrationService.parseTrip(Set.of("L991"), Set.of());
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void parseTrip_withActiveServiceId_returnsTripsForRoute() {
+        ParseTimetableService integrationService = new ParseTimetableService(new SimpleMeterRegistry(), Set.of("L991")) {
+        };
+
+        List<ParseTimetableService.Trip> result = integrationService.parseTrip(Set.of("L991"), Set.of("1111100-1"));
+
+        assertThat(result).isNotEmpty();
+        assertThat(result).allMatch(t -> t.routeId().equals("L991"));
+    }
+
     // --- helpers ---
 
     /** Builds stops with departure times starting at baseTime, incrementing by 1 minute each stop. */
@@ -214,5 +325,38 @@ class ParseTimetableServiceTest {
         java.lang.reflect.Field field = ParseTimetableService.class.getDeclaredField("maxLimit");
         field.setAccessible(true);
         field.set(svc, value);
+    }
+
+    /**
+     * Writes calendar.txt and calendar_dates.txt fixture files into the given directory.
+     *
+     * calendar.txt services:
+     *   MON_FRI      — Mon–Fri, 2026-04-01 to 2026-04-30  (active on Wednesday 2026-04-02)
+     *   SAT_SUN      — Sat–Sun, 2026-04-01 to 2026-04-30  (not active on Wednesday)
+     *   FUTURE_SVC   — Mon–Fri, starts 2026-05-01          (not yet active on 2026-04-02)
+     *   PAST_SVC     — Mon–Fri, ended 2026-03-31            (expired before 2026-04-02)
+     *   ALWAYS_ACTIVE — every day, 2026-04-01 to 2026-04-30 (removed by exception on 2026-04-02)
+     *   NOT_ON_DATE  — no weekday flags set                 (never active by schedule)
+     *
+     * calendar_dates.txt exceptions for 2026-04-02:
+     *   NEW_EXCEPTION,20260402,1    → added (not in base schedule)
+     *   ALWAYS_ACTIVE,20260402,2    → removed (was active by schedule)
+     *   ADDED_NEXT_DAY,20260403,1   → different date, no effect on 2026-04-02
+     */
+    private static void writeCalendarFixtures(Path dir) throws IOException {
+        Files.writeString(dir.resolve("calendar.txt"),
+                "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\n" +
+                "MON_FRI,1,1,1,1,1,0,0,20260401,20260430\n" +
+                "SAT_SUN,0,0,0,0,0,1,1,20260401,20260430\n" +
+                "FUTURE_SVC,1,1,1,1,1,0,0,20260501,20260531\n" +
+                "PAST_SVC,1,1,1,1,1,0,0,20260301,20260331\n" +
+                "ALWAYS_ACTIVE,1,1,1,1,1,1,1,20260401,20260430\n" +
+                "NOT_ON_DATE,0,0,0,0,0,0,0,20260401,20260430\n");
+
+        Files.writeString(dir.resolve("calendar_dates.txt"),
+                "service_id,date,exception_type\n" +
+                "NEW_EXCEPTION,20260402,1\n" +
+                "ALWAYS_ACTIVE,20260402,2\n" +
+                "ADDED_NEXT_DAY,20260403,1\n");
     }
 }
