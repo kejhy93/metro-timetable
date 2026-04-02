@@ -229,7 +229,7 @@ class ParseTimetableServiceTest {
         // SAT_SUN has saturday=sunday=1 only, Wednesday flag is 0 → excluded
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).doesNotContain("SAT_SUN");
+        assertThat(result).isNotEmpty().doesNotContain("SAT_SUN");
     }
 
     @Test
@@ -237,7 +237,7 @@ class ParseTimetableServiceTest {
         // FUTURE_SVC starts 2026-05-01, today is 2026-04-02 → excluded
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).doesNotContain("FUTURE_SVC");
+        assertThat(result).isNotEmpty().doesNotContain("FUTURE_SVC");
     }
 
     @Test
@@ -245,7 +245,7 @@ class ParseTimetableServiceTest {
         // PAST_SVC ended 2026-03-31, today is 2026-04-02 → excluded
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).doesNotContain("PAST_SVC");
+        assertThat(result).isNotEmpty().doesNotContain("PAST_SVC");
     }
 
     @Test
@@ -261,7 +261,7 @@ class ParseTimetableServiceTest {
         // ALWAYS_ACTIVE runs every day in calendar.txt but is removed by exception_type=2 on 2026-04-02
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).doesNotContain("ALWAYS_ACTIVE");
+        assertThat(result).isNotEmpty().doesNotContain("ALWAYS_ACTIVE");
     }
 
     @Test
@@ -269,7 +269,7 @@ class ParseTimetableServiceTest {
         // ADDED_NEXT_DAY has an exception_type=1 row for 2026-04-03 (not today) → not added today
         Set<String> result = service.parseActiveServiceIds(FIXED_TODAY);
 
-        assertThat(result).doesNotContain("ADDED_NEXT_DAY");
+        assertThat(result).isNotEmpty().doesNotContain("ADDED_NEXT_DAY");
     }
 
     // --- parseTrip tests ---
@@ -286,8 +286,7 @@ class ParseTimetableServiceTest {
         // trips.txt fixture has 2 L991 trips with 1111100-1 and 1 with 1111111-1, plus 1 L992 trip
         List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of("1111100-1"));
 
-        assertThat(result).hasSize(2);
-        assertThat(result).allMatch(t -> t.routeId().equals("L991"));
+        assertThat(result).hasSize(2).allMatch(t -> t.routeId().equals("L991"));
     }
 
     // --- helpers ---
