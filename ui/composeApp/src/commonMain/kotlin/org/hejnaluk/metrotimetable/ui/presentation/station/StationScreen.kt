@@ -6,8 +6,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -23,6 +28,8 @@ import org.koin.compose.koinInject
 fun StationScreen(
     lineId: String,
     onStationSelected: (station: String) -> Unit,
+    onBack: () -> Unit,
+    onHome: () -> Unit,
     dataSource: LineDataSource = koinInject()
 ) {
     val line = dataSource.getLines().firstOrNull { it.id == lineId }
@@ -30,7 +37,19 @@ fun StationScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Line ${line?.name ?: lineId}") })
+            TopAppBar(
+                title = { Text("Line ${line?.name ?: lineId}") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHome) {
+                        Icon(Icons.Filled.Home, contentDescription = "Home")
+                    }
+                }
+            )
         }
     ) { padding ->
         LazyColumn(
