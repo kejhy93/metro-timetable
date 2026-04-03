@@ -299,9 +299,10 @@ public class ParseTimetableService {
      * @param stationName the station name to query (case-insensitive)
      * @param direction   optional direction filter ({@code 0} or {@code 1}); {@code null} returns both directions
      * @param limit       maximum number of departures to return; clamped to {@code [0, maxLimit]}
+     * @param routeId     optional route filter (e.g. {@code "L991"}); {@code null} returns departures from all routes
      * @return list of upcoming {@link TrainDeparture}s sorted by departure time, or an empty list if the station is not found
      */
-    public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit) {
+    public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit, String routeId) {
         Timer timer = Timer.builder("station.query")
                 .description("Time taken to query trains for a station")
                 .register(meterRegistry);
@@ -319,6 +320,7 @@ public class ParseTimetableService {
         final int effectiveLimit = Math.clamp(limit, 0, maxLimit);
 
         List<TrainDeparture> result = keyToStopIndex.entrySet().stream()
+                .filter(e -> routeId == null || e.getKey().startsWith(routeId + "-"))
                 .filter(e -> direction == null || e.getKey().endsWith("-" + direction))
                 .flatMap(e -> collectDepartures(e.getKey(), e.getValue(), snapshot, now))
                 .sorted(Comparator.comparing(TrainDeparture::departureTime))
