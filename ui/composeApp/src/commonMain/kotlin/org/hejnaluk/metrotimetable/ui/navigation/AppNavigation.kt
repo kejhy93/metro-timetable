@@ -46,7 +46,9 @@ fun AppNavigation() {
                 lineId = route.lineId,
                 onStationSelected = { station ->
                     navController.navigate(DirectionRoute(route.lineId, station))
-                }
+                },
+                onBack = { navController.popBackStack() },
+                onHome = { navController.popBackStack(LineRoute, inclusive = false) }
             )
         }
         composable<DirectionRoute> { backStackEntry ->
@@ -58,7 +60,9 @@ fun AppNavigation() {
                     navController.navigate(
                         DeparturesRoute(route.lineId, route.station, directionId, destination)
                     )
-                }
+                },
+                onBack = { navController.popBackStack() },
+                onHome = { navController.popBackStack(LineRoute, inclusive = false) }
             )
         }
         composable<DeparturesRoute> { backStackEntry ->
@@ -68,7 +72,8 @@ fun AppNavigation() {
                 directionId = route.directionId,
                 destination = route.destination,
                 routeId = route.lineId,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onHome = { navController.popBackStack(LineRoute, inclusive = false) }
             )
         }
     }
