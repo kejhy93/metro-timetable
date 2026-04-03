@@ -37,11 +37,12 @@ fun DeparturesScreen(
     station: String,
     directionId: Int,
     destination: String,
+    routeId: String? = null,
     onBack: () -> Unit,
     viewModel: DeparturesViewModel = koinViewModel()
 ) {
-    LaunchedEffect(station, directionId) {
-        viewModel.start(station, directionId)
+    LaunchedEffect(station, directionId, routeId) {
+        viewModel.start(station, directionId, routeId)
     }
 
     val state by viewModel.state.collectAsState()

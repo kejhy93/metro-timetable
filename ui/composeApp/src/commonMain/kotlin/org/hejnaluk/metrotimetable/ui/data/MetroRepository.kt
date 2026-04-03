@@ -8,7 +8,8 @@ class MetroRepository(private val apiClient: MetroApiClient) {
     suspend fun fetchDepartures(
         station: String,
         direction: Int,
-        limit: Int = 10
+        limit: Int = 10,
+        routeId: String? = null
     ): Result<List<TrainDeparture>> =
-        runCatching { apiClient.fetchDepartures(station, direction, limit) }
+        runCatching { apiClient.fetchDepartures(station, direction, limit, routeId) }
 }

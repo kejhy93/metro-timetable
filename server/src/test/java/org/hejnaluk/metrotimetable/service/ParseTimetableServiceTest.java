@@ -72,7 +72,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(13, 0), stopsAt(LocalTime.of(13, 0), "Depo Hostivař", "Muzeum", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().departureTime().atZone(PRAGUE_ZONE).toLocalTime()).isEqualTo(LocalTime.of(13, 1));
@@ -80,7 +80,7 @@ class ParseTimetableServiceTest {
 
     @Test
     void returnsEmptyList_whenCacheEmpty() {
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).isEmpty();
     }
@@ -91,7 +91,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Náměstí Míru", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).isEmpty();
     }
@@ -102,8 +102,8 @@ class ParseTimetableServiceTest {
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
         ));
 
-        assertThat(service.getTrainsForStation("muzeum", null, 10)).hasSize(1);
-        assertThat(service.getTrainsForStation("MUZEUM", null, 10)).hasSize(1);
+        assertThat(service.getTrainsForStation("muzeum", null, 10, null)).hasSize(1);
+        assertThat(service.getTrainsForStation("MUZEUM", null, 10, null)).hasSize(1);
     }
 
     @Test
@@ -115,7 +115,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(14, 0), stops("Zličín", "Muzeum", "Depo Hostivař")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", 0, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", 0, 10, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().directionId()).isZero();
@@ -130,7 +130,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(16, 0), stopsAt(LocalTime.of(16, 0), "Depo Hostivař", "Muzeum", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 2);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 2, null);
 
         assertThat(result).hasSize(2);
         assertThat(result)
@@ -150,10 +150,40 @@ class ParseTimetableServiceTest {
                 LocalTime.of(14, 0), stops("Zličín", "Muzeum", "Depo Hostivař")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(TrainDeparture::directionId).containsExactlyInAnyOrder(0, 1);
+    }
+
+    @Test
+    void filtersByRouteId_returnsOnlyMatchingRoute() {
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
+        ));
+        populateCache("L992-0", Map.of(
+                LocalTime.of(13, 30), stops("Černý Most", "Muzeum", "Zličín")
+        ));
+
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, "L991");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().routeId()).isEqualTo("L991");
+    }
+
+    @Test
+    void returnsAllRoutes_whenRouteIdNull() {
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")
+        ));
+        populateCache("L992-0", Map.of(
+                LocalTime.of(13, 30), stops("Černý Most", "Muzeum", "Zličín")
+        ));
+
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(TrainDeparture::routeId).containsExactlyInAnyOrder("L991", "L992");
     }
 
     @Test
@@ -167,7 +197,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(13, 50), stops("Depo Hostivař", "Muzeum", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 5);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 5, null);
 
         assertThat(result).hasSize(5);
     }
@@ -180,7 +210,7 @@ class ParseTimetableServiceTest {
         }
         populateCache("L991-0", cacheEntries);
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 20);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 20, null);
 
         assertThat(result).hasSize(15);
     }
@@ -191,7 +221,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(13, 0), stops("Depo Hostivař", "Skalka", "Muzeum", "Dejvická", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).hasSize(1);
         TrainDeparture departure = result.getFirst();
@@ -210,7 +240,7 @@ class ParseTimetableServiceTest {
                 LocalTime.of(14, 0), stopsAt(LocalTime.of(14, 0), "Depo Hostivař", "Muzeum", "Skalka", "Zličín")
         ));
 
-        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10);
+        List<TrainDeparture> result = service.getTrainsForStation("Muzeum", null, 10, null);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().upcomingStations()).containsExactly("Muzeum", "Skalka", "Zličín");

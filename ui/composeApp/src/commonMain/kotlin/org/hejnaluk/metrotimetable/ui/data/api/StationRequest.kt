@@ -6,5 +6,6 @@ import kotlinx.serialization.Serializable
 data class StationRequest(
     val station: String,
     val direction: Int?,
-    val limit: Int = 5
+    val limit: Int = 5,
+    val routeId: String? = null
 )
