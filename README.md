@@ -55,13 +55,14 @@ Returns upcoming train departures for a given station.
 | `station` | string | yes | Station name (case-insensitive) |
 | `direction` | integer | no | Direction filter: `0` or `1`; omit to return both |
 | `limit` | integer | no | Max results to return; must be positive (default: `StationRequest.DEFAULT_LIMIT = 5`) |
+| `routeId` | string | no | Route filter (e.g. `"L991"`); omit to return departures from all routes |
 
 **Example:**
 
 ```bash
 curl -X POST http://localhost:8080/pid/station \
   -H "Content-Type: application/json" \
-  -d '{"station": "Muzeum", "direction": 0, "limit": 3}'
+  -d '{"station": "Muzeum", "direction": 0, "limit": 3, "routeId": "L991"}'
 ```
 
 **Response** — array of `TrainDeparture` objects:
