@@ -15,17 +15,17 @@ class DeparturesViewModel(private val repository: MetroRepository) : ViewModel()
     private val _state = MutableStateFlow<DeparturesState>(DeparturesState.Loading)
     val state: StateFlow<DeparturesState> = _state.asStateFlow()
 
-    fun start(station: String, directionId: Int) {
+    fun start(station: String, directionId: Int, routeId: String? = null) {
         viewModelScope.launch {
             while (true) {
-                load(station, directionId)
+                load(station, directionId, routeId)
                 delay(REFRESH_INTERVAL_MS)
             }
         }
     }
 
-    private suspend fun load(station: String, directionId: Int) {
-        repository.fetchDepartures(station, directionId).fold(
+    private suspend fun load(station: String, directionId: Int, routeId: String? = null) {
+        repository.fetchDepartures(station, directionId, routeId = routeId).fold(
             onSuccess = { departures ->
                 _state.value = DeparturesState.Success(
                     departures = departures,

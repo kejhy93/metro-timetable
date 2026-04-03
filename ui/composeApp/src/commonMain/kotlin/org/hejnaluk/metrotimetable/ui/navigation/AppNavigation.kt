@@ -67,6 +67,7 @@ fun AppNavigation() {
                 station = route.station,
                 directionId = route.directionId,
                 destination = route.destination,
+                routeId = route.lineId,
                 onBack = { navController.popBackStack() }
             )
         }

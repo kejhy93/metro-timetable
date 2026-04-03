@@ -27,11 +27,12 @@ class MetroApiClient(engine: HttpClientEngine) {
     suspend fun fetchDepartures(
         station: String,
         direction: Int?,
-        limit: Int = 10
+        limit: Int = 10,
+        routeId: String? = null
     ): List<TrainDeparture> =
         client.post("$BASE_URL/pid/station") {
             contentType(ContentType.Application.Json)
-            setBody(StationRequest(station, direction, limit))
+            setBody(StationRequest(station, direction, limit, routeId))
         }.body()
 
     companion object {
