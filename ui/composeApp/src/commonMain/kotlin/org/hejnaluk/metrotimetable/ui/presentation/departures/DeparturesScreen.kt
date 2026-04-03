@@ -41,7 +41,7 @@ fun DeparturesScreen(
     onBack: () -> Unit,
     viewModel: DeparturesViewModel = koinViewModel()
 ) {
-    LaunchedEffect(station, directionId) {
+    LaunchedEffect(station, directionId, routeId) {
         viewModel.start(station, directionId, routeId)
     }
 
