@@ -47,8 +47,8 @@ public class PIDController {
     @PostMapping("/station")
     public ResponseEntity<List<TrainDeparture>> getTrainsForStation(@Valid @RequestBody StationRequest request) {
         int effectiveLimit = request.limit() != null ? request.limit() : StationRequest.DEFAULT_LIMIT;
-        log.info("POST /pid/station - station={}, direction={}, limit={}", request.station(), request.direction(), effectiveLimit);
-        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(request.station(), request.direction(), effectiveLimit));
+        log.info("POST /pid/station - station={}, direction={}, limit={}, routeId={}", request.station(), request.direction(), effectiveLimit, request.routeId());
+        return ResponseEntity.ok(parseTimetableService.getTrainsForStation(request.station(), request.direction(), effectiveLimit, request.routeId()));
     }
 
 }

@@ -11,11 +11,13 @@ import jakarta.validation.constraints.Positive;
  * @param station   the station name to query (case-insensitive); must not be blank
  * @param direction optional direction filter ({@code 0} or {@code 1}); {@code null} returns both directions
  * @param limit     maximum number of results to return; defaults to {@link #DEFAULT_LIMIT} when {@code null}
+ * @param routeId   optional route filter (e.g. {@code "L991"}); {@code null} returns departures from all routes
  */
 public record StationRequest(
         @NotBlank String station,
         @Min(0) @Max(1) Integer direction,
-        @Positive Integer limit
+        @Positive Integer limit,
+        String routeId
 ) {
     public static final int DEFAULT_LIMIT = 5;
 }

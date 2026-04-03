@@ -57,11 +57,11 @@ class PIDControllerTest {
         String station = "Muzeum";
         Integer direction = 0;
         int limit = 5;
-        when(parseTimetableService.getTrainsForStation(station, direction, limit)).thenReturn(List.of());
+        when(parseTimetableService.getTrainsForStation(station, direction, limit, null)).thenReturn(List.of());
 
-        controller.getTrainsForStation(new StationRequest(station, direction, limit));
+        controller.getTrainsForStation(new StationRequest(station, direction, limit, null));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, limit);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, limit, null);
     }
 
     @Test
@@ -69,9 +69,9 @@ class PIDControllerTest {
         String station = "Muzeum";
         int limit = 5;
         TrainDeparture departure = new TrainDeparture("L991", 0, Instant.parse("2026-03-30T12:00:00Z"), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
-        when(parseTimetableService.getTrainsForStation(station, null, limit)).thenReturn(List.of(departure));
+        when(parseTimetableService.getTrainsForStation(station, null, limit, null)).thenReturn(List.of(departure));
 
-        var response = controller.getTrainsForStation(new StationRequest(station, null, limit));
+        var response = controller.getTrainsForStation(new StationRequest(station, null, limit, null));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsExactly(departure);
@@ -82,11 +82,11 @@ class PIDControllerTest {
         String station = "Muzeum";
         Integer direction = null;
         TrainDeparture departure = new TrainDeparture("L991", 0, Instant.parse("2026-03-30T12:00:00Z"), "Depo Hostivař", List.of("Muzeum", "Depo Hostivař"));
-        when(parseTimetableService.getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT)).thenReturn(List.of(departure));
+        when(parseTimetableService.getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT, null)).thenReturn(List.of(departure));
 
-        var response = controller.getTrainsForStation(new StationRequest(station, direction, null));
+        var response = controller.getTrainsForStation(new StationRequest(station, direction, null, null));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, direction, StationRequest.DEFAULT_LIMIT, null);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).containsExactly(departure);
     }
@@ -94,22 +94,34 @@ class PIDControllerTest {
     @Test
     void getTrainsForStation_defaultLimit() {
         String station = "Muzeum";
-        when(parseTimetableService.getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT)).thenReturn(List.of());
+        when(parseTimetableService.getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT, null)).thenReturn(List.of());
 
-        controller.getTrainsForStation(new StationRequest(station, null, StationRequest.DEFAULT_LIMIT));
+        controller.getTrainsForStation(new StationRequest(station, null, StationRequest.DEFAULT_LIMIT, null));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, StationRequest.DEFAULT_LIMIT, null);
     }
 
     @Test
     void getTrainsForStation_noDirection() {
         String station = "Muzeum";
         int limit = 3;
-        when(parseTimetableService.getTrainsForStation(station, null, limit)).thenReturn(List.of());
+        when(parseTimetableService.getTrainsForStation(station, null, limit, null)).thenReturn(List.of());
 
-        controller.getTrainsForStation(new StationRequest(station, null, limit));
+        controller.getTrainsForStation(new StationRequest(station, null, limit, null));
 
-        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, limit);
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, limit, null);
+    }
+
+    @Test
+    void getTrainsForStation_passesRouteIdToService() {
+        String station = "Muzeum";
+        int limit = 5;
+        String routeId = "L991";
+        when(parseTimetableService.getTrainsForStation(station, null, limit, routeId)).thenReturn(List.of());
+
+        controller.getTrainsForStation(new StationRequest(station, null, limit, routeId));
+
+        Mockito.verify(parseTimetableService, times(1)).getTrainsForStation(station, null, limit, routeId);
     }
 
     @Test
