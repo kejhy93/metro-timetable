@@ -6,7 +6,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,13 +32,27 @@ fun DirectionScreen(
     lineId: String,
     station: String,
     onDirectionSelected: (directionId: Int, destination: String) -> Unit,
+    onBack: () -> Unit,
+    onHome: () -> Unit,
     dataSource: LineDataSource = koinInject()
 ) {
     val line = dataSource.getLines().firstOrNull { it.id == lineId }
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(station) })
+            TopAppBar(
+                title = { Text(station) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onHome) {
+                        Icon(Icons.Filled.Home, contentDescription = "Home")
+                    }
+                }
+            )
         }
     ) { padding ->
         Column(
