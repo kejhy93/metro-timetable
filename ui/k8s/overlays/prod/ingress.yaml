@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: metro-timetable
+  name: metro-timetable-ui
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
     traefik.ingress.kubernetes.io/router.tls: "true"
@@ -15,17 +15,10 @@ spec:
     - host: hejnaluk.dev
       http:
         paths:
-          - path: /pid
+          - path: /metro
             pathType: Prefix
             backend:
               service:
-                name: metro-timetable
-                port:
-                  number: 80
-          - path: /actuator
-            pathType: Prefix
-            backend:
-              service:
-                name: metro-timetable
+                name: metro-timetable-ui
                 port:
                   number: 80
