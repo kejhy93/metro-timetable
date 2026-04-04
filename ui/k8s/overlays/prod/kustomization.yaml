@@ -1,0 +1,13 @@
+namespace: metro-prod
+
+resources:
+  - ../../base
+  - ingress.yaml
+
+images:
+  - name: metro-timetable-ui
+    newName: ghcr.io/kejhy93/metro-timetable-ui
+    newTag: main
+
+patches:
+  - path: deployment-patch.yaml

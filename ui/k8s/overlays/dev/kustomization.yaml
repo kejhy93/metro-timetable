@@ -1,0 +1,14 @@
+namespace: metro-dev
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+images:
+  - name: metro-timetable-ui
+    newName: localhost/metro-timetable-ui
+    newTag: local
+
+patches:
+  - path: deployment-patch.yaml
+  - path: service-patch.yaml
