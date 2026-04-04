@@ -13,7 +13,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
-class MetroApiClient(engine: HttpClientEngine) {
+class MetroApiClient(engine: HttpClientEngine, private val baseUrl: String) {
 
     private val client = HttpClient(engine) {
         install(ContentNegotiation) {
@@ -30,13 +30,9 @@ class MetroApiClient(engine: HttpClientEngine) {
         limit: Int = 10,
         routeId: String? = null
     ): List<TrainDeparture> =
-        client.post("$BASE_URL/pid/station") {
+        client.post("$baseUrl/pid/station") {
             contentType(ContentType.Application.Json)
             setBody(StationRequest(station, direction, limit, routeId))
         }.body()
 
-    companion object {
-//        const val BASE_URL = "http://localhost:8080"
-        const val BASE_URL = "https://hejnaluk.dev"
-    }
 }

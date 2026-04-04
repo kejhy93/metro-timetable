@@ -16,3 +16,5 @@ actual fun currentLocalTime(): LocalTime =
         .time
 
 actual fun httpClientEngine(): HttpClientEngine = Js.create()
+
+actual fun apiBaseUrl(): String = ""

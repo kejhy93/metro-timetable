@@ -11,3 +11,5 @@ actual fun currentLocalTime(): LocalTime =
     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
 
 actual fun httpClientEngine(): HttpClientEngine = Js.create()
+
+actual fun apiBaseUrl(): String = ""

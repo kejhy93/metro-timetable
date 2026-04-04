@@ -5,3 +5,4 @@ import kotlinx.datetime.LocalTime
 
 expect fun currentLocalTime(): LocalTime
 expect fun httpClientEngine(): HttpClientEngine
+expect fun apiBaseUrl(): String

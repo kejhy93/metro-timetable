@@ -11,3 +11,5 @@ actual fun currentLocalTime(): LocalTime =
     kotlin.time.Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).time
 
 actual fun httpClientEngine(): HttpClientEngine = Java.create()
+
+actual fun apiBaseUrl(): String = "https://hejnaluk.dev"
