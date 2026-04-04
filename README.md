@@ -173,7 +173,7 @@ ui/
 
 ### Backend connection
 
-`MetroApiClient` calls `POST /pid/station` at `https://hejnaluk.dev`. To point at a local backend, change `BASE_URL` in `ui/composeApp/src/commonMain/kotlin/.../data/api/MetroApiClient.kt`.
+`MetroApiClient` calls `POST /pid/station`. In production the nginx container reverse-proxies `/pid/` to the backend `metro-timetable` service, so the frontend and API share the same origin (`https://hejnaluk.dev`). To point at a local backend, change `BASE_URL` in `ui/composeApp/src/commonMain/kotlin/.../data/api/MetroApiClient.kt`.
 
 ### Build and run
 
@@ -209,7 +209,8 @@ All commands run from the `ui/` directory.
 - **JUnit 5 + Mockito + OkHttp MockWebServer**: Unit and integration testing.
 - **Prometheus + Grafana**: Metrics collection and dashboards.
 - **SonarCloud**: Code quality and security analysis.
-- **CircleCI**: Continuous integration and deployment.
+- **GitHub Actions**: CI/CD — unified `deploy-prod.yml` builds and deploys server, UI, and desktop in one workflow.
+- **nginx**: Serves the wasmJs web frontend and reverse-proxies `/pid/` API calls to the backend.
 - **Kotlin Multiplatform + Compose Multiplatform**: Cross-platform UI (Android, iOS, Desktop, Web).
 - **Ktor**: Multiplatform HTTP client used in the KMP UI.
 - **Koin**: Dependency injection for the KMP UI.
@@ -230,13 +231,15 @@ The script will show the current tag, let you pick patch / minor / major, and as
 
 ### What happens
 
-| Job | Trigger | Output |
-|---|---|---|
-| `deploy-web` | tag push | Builds `wasmJs` bundle, deploys to **GitHub Pages** |
-| `deploy-desktop` | tag push | Builds uber JAR, attaches to **GitHub Release** `v1.2.3` |
-| `deploy` (server) | after Docker workflow succeeds | Rolls out new server image to **k8s** (`metro-prod`) |
+All three builds run in parallel. A `gate` job (requiring **production environment approval**) must pass before any deployment proceeds. Once approved, the three deploy jobs run in parallel.
 
-The server deployment is indirect: the tag also triggers `docker-publish.yml` which builds and pushes the container image, and only once that succeeds does the `deploy` job roll it out to the cluster.
+| Job | What it does | Output |
+|---|---|---|
+| `build-server` → `deploy-server` | Builds server JAR + Docker image, pushes to GHCR, then SSHes to VPS and runs `kubectl set image` | New server image live in **k8s** (`metro-prod`) |
+| `build-ui` → `deploy-ui` | Builds `wasmJs` bundle, bakes it into an **nginx Docker image**, pushes to GHCR, then SSHes to VPS and runs `kubectl set image` | New UI image live in **k8s** (`metro-prod`) at `https://hejnaluk.dev/metro` |
+| `build-desktop` → `deploy-desktop` | Builds uber JAR | JAR attached to **GitHub Release** `v1.2.3` |
+
+The nginx container serves the static wasmJs frontend at `/metro/` and reverse-proxies `/pid/` requests to the backend `metro-timetable` service, keeping all traffic on a single origin.
 
 ### Version tag format
 
@@ -246,10 +249,8 @@ Tags must match `v*.*.*` (e.g. `v1.0.0`, `v2.3.1`). Non-matching tags do not tri
 
 | Artefact | URL |
 |---|---|
-| Web app (GitHub Pages) | https://kejhy93.github.io/metro-timetable |
+| Web app (nginx / k8s) | https://hejnaluk.dev/metro |
 | Desktop JAR (GitHub Release) | https://github.com/kejhy93/metro-timetable/releases/latest |
-
-> Before the first release, enable GitHub Pages in repository Settings → Pages → Source → **GitHub Actions**.
 
 ## Contributing
 
