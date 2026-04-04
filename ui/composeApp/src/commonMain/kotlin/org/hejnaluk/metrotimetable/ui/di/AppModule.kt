@@ -14,7 +14,7 @@ import org.koin.dsl.module
 val appModule = module {
     single<LineDataSource> { LocalLineDataSource() }
     single { MetroApiClient(httpClientEngine(), apiBaseUrl()) }
-    single { MetroRepository(get()) }
+    single { MetroRepository(get(), get()) }
     viewModel { DeparturesViewModel(get()) }
     viewModel { LinesViewModel(get(), get()) }
 }

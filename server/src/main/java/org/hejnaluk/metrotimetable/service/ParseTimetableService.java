@@ -344,6 +344,7 @@ public class ParseTimetableService {
     public List<LineInfo> getLines() {
         final TimetableData snapshot = timetableData;
         return snapshot.routeCache().entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
                 .map(entry -> {
                     final String key = entry.getKey();
                     final int lastDash = key.lastIndexOf('-');
@@ -353,8 +354,13 @@ public class ParseTimetableService {
                     final List<String> stations = referenceTrip.stream()
                             .map(cs -> cs.stop().stopName())
                             .toList();
+                    if (stations.isEmpty()) {
+                        log.warn("Skipping cache key {} — reference trip contains no stops", key);
+                        return null;
+                    }
                     return new LineInfo(routeId, directionId, stations.getLast(), stations);
                 })
+                .filter(Objects::nonNull)
                 .toList();
     }
 
