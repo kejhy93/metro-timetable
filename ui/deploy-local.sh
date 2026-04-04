@@ -9,7 +9,7 @@ usage() {
   echo "Usage: $0 [--env dev|test|prod]"
   echo "  --env dev   Build locally and deploy to metro-dev namespace (default)"
   echo "  --env test  Pull ghcr.io/kejhy93/metro-timetable-ui:main and deploy to metro-test namespace"
-  echo "  --env prod  Pull ghcr.io/kejhy93/metro-timetable-ui:latest and deploy to metro-prod namespace"
+  echo "  --env prod  Pull ghcr.io/kejhy93/metro-timetable-ui:main and deploy to metro-prod namespace"
   exit 1
 }
 
@@ -30,7 +30,10 @@ case "$ENV" in
     podman build -t "$LOCAL_IMAGE" "$SCRIPT_DIR"
 
     echo "==> Loading image into minikube..."
-    podman save "$LOCAL_IMAGE" | minikube image load --overwrite=true -
+    TMP_IMAGE_TAR="$(mktemp)"
+    podman save "$LOCAL_IMAGE" -o "$TMP_IMAGE_TAR"
+    minikube image load --overwrite=true --input="$TMP_IMAGE_TAR"
+    rm -f "$TMP_IMAGE_TAR"
     ;;
   test)
     REMOTE_IMAGE="ghcr.io/kejhy93/metro-timetable-ui:main"
@@ -38,7 +41,7 @@ case "$ENV" in
     minikube image load "$REMOTE_IMAGE"
     ;;
   prod)
-    REMOTE_IMAGE="ghcr.io/kejhy93/metro-timetable-ui:latest"
+    REMOTE_IMAGE="ghcr.io/kejhy93/metro-timetable-ui:main"
     echo "==> Loading remote image into minikube: $REMOTE_IMAGE..."
     minikube image load "$REMOTE_IMAGE"
     ;;

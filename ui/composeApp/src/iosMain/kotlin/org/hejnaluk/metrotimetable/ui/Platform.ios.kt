@@ -12,4 +12,4 @@ actual fun currentLocalTime(): LocalTime =
 
 actual fun httpClientEngine(): HttpClientEngine = Darwin.create()
 
-actual fun apiBaseUrl(): String = "https://hejnaluk.dev"
+actual fun apiBaseUrl(): String = PROD_BASE_URL

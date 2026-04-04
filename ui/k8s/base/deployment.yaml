@@ -22,13 +22,13 @@ spec:
             - containerPort: 80
           readinessProbe:
             httpGet:
-              path: /
+              path: /metro/index.html
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /
+              path: /metro/index.html
               port: 80
             initialDelaySeconds: 10
             periodSeconds: 30
