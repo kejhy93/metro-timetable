@@ -16,7 +16,9 @@ class LocalLineDataSource : LineDataSource {
                 "Flora", "Želivského", "Strašnická", "Skalka", "Depo Hostivař"
             ),
             terminus0 = "Depo Hostivař",
-            terminus1 = "Nemocnice Motol"
+            terminus1 = "Nemocnice Motol",
+            terminus0DirectionId = 1,
+            terminus1DirectionId = 0
         ),
         MetroLine(
             id = "L992",
@@ -30,7 +32,9 @@ class LocalLineDataSource : LineDataSource {
                 "Kolbenova", "Hloubětín", "Rajská zahrada", "Černý Most"
             ),
             terminus0 = "Černý Most",
-            terminus1 = "Zličín"
+            terminus1 = "Zličín",
+            terminus0DirectionId = 0,
+            terminus1DirectionId = 1
         ),
         MetroLine(
             id = "L993",
@@ -44,7 +48,9 @@ class LocalLineDataSource : LineDataSource {
                 "Střížkov", "Prosek", "Letňany"
             ),
             terminus0 = "Letňany",
-            terminus1 = "Háje"
+            terminus1 = "Háje",
+            terminus0DirectionId = 0,
+            terminus1DirectionId = 1
         )
     )
 

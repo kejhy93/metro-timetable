@@ -1,5 +1,6 @@
 package org.hejnaluk.metrotimetable.controller;
 
+import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.StationRequest;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
@@ -21,6 +22,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -162,5 +164,33 @@ class PIDControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"station\":\"Muzeum\",\"limit\":-1}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getLines_callsService() {
+        when(parseTimetableService.getLines()).thenReturn(List.of());
+
+        controller.getLines();
+
+        Mockito.verify(parseTimetableService, times(1)).getLines();
+    }
+
+    @Test
+    void getLines_returnsServiceResult() {
+        LineInfo line = new LineInfo("L991", 0, "Zličín", List.of("Depo Hostivař", "Muzeum", "Zličín"));
+        when(parseTimetableService.getLines()).thenReturn(List.of(line));
+
+        var response = controller.getLines();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsExactly(line);
+    }
+
+    @Test
+    void getLines_returnsEmptyList_whenCacheEmpty() throws Exception {
+        when(parseTimetableService.getLines()).thenReturn(List.of());
+
+        mockMvc.perform(get("/pid/lines"))
+                .andExpect(status().isOk());
     }
 }

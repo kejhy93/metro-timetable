@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Timer;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -329,6 +330,38 @@ public class ParseTimetableService {
 
         sample.stop(timer);
         return result;
+    }
+
+    /**
+     * Returns all known line/direction combinations with their ordered station lists.
+     * <p>
+     * For each route-direction key in the cache, uses the trip with the most stops as the
+     * canonical station order (same reference trip strategy used when building the station index).
+     *
+     * @return list of {@link LineInfo} records, one per route-direction pair; empty if the cache
+     *         has not been populated yet
+     */
+    public List<LineInfo> getLines() {
+        final TimetableData snapshot = timetableData;
+        return snapshot.routeCache().entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
+                .map(entry -> {
+                    final String key = entry.getKey();
+                    final int lastDash = key.lastIndexOf('-');
+                    final String routeId = key.substring(0, lastDash);
+                    final int directionId = Integer.parseInt(key.substring(lastDash + 1));
+                    final List<CompleteStop> referenceTrip = findTripWithMostStops(entry.getValue());
+                    final List<String> stations = referenceTrip.stream()
+                            .map(cs -> cs.stop().stopName())
+                            .toList();
+                    if (stations.isEmpty()) {
+                        log.warn("Skipping cache key {} — reference trip contains no stops", key);
+                        return null;
+                    }
+                    return new LineInfo(routeId, directionId, stations.getLast(), stations);
+                })
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     /**

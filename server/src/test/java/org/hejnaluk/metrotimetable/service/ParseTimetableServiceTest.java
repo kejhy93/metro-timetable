@@ -1,6 +1,7 @@
 package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -244,6 +245,60 @@ class ParseTimetableServiceTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().upcomingStations()).containsExactly("Muzeum", "Skalka", "Zličín");
+    }
+
+    // --- getLines tests ---
+
+    @Test
+    void getLines_returnsEmptyList_whenCacheEmpty() {
+        List<LineInfo> result = service.getLines();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getLines_returnsOneEntryPerRouteDirectionKey() {
+        populateCache("L991-0", Map.of(LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")));
+        populateCache("L991-1", Map.of(LocalTime.of(14, 0), stops("Zličín", "Muzeum", "Depo Hostivař")));
+
+        List<LineInfo> result = service.getLines();
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(LineInfo::routeId).containsExactlyInAnyOrder("L991", "L991");
+        assertThat(result).extracting(LineInfo::directionId).containsExactlyInAnyOrder(0, 1);
+    }
+
+    @Test
+    void getLines_stations_inTripOrder() {
+        populateCache("L991-0", Map.of(LocalTime.of(13, 0), stops("Depo Hostivař", "Skalka", "Muzeum", "Dejvická", "Zličín")));
+
+        List<LineInfo> result = service.getLines();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().stations()).containsExactly("Depo Hostivař", "Skalka", "Muzeum", "Dejvická", "Zličín");
+    }
+
+    @Test
+    void getLines_finalDestination_isLastStation() {
+        populateCache("L991-0", Map.of(LocalTime.of(13, 0), stops("Depo Hostivař", "Muzeum", "Zličín")));
+
+        List<LineInfo> result = service.getLines();
+
+        assertThat(result.getFirst().finalDestination()).isEqualTo("Zličín");
+    }
+
+    @Test
+    void getLines_usesLongestTrip_forStationList() {
+        // Short trip missing some stations — longest trip must be used for the full station list.
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stopsAt(LocalTime.of(13, 0), "Depo Hostivař", "Skalka"),
+                LocalTime.of(14, 0), stopsAt(LocalTime.of(14, 0), "Depo Hostivař", "Skalka", "Muzeum", "Zličín")
+        ));
+
+        List<LineInfo> result = service.getLines();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().stations()).containsExactly("Depo Hostivař", "Skalka", "Muzeum", "Zličín");
     }
 
     // --- parseActiveServiceIds tests ---

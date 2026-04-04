@@ -12,4 +12,4 @@ actual fun currentLocalTime(): LocalTime =
 
 actual fun httpClientEngine(): HttpClientEngine = Java.create()
 
-actual fun apiBaseUrl(): String = PROD_BASE_URL
+actual fun apiBaseUrl(): String = System.getenv("API_BASE_URL") ?: PROD_BASE_URL
