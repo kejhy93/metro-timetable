@@ -15,7 +15,14 @@ spec:
     - host: hejnaluk.dev
       http:
         paths:
-          - path: /
+          - path: /pid
+            pathType: Prefix
+            backend:
+              service:
+                name: metro-timetable
+                port:
+                  number: 80
+          - path: /actuator
             pathType: Prefix
             backend:
               service:
