@@ -33,6 +33,7 @@ class MetroRepository(private val apiClient: MetroApiClient) {
                     terminus1DirectionId = dir1.directionId
                 )
             }
+            .sortedBy { it.name }
     }
 
     suspend fun fetchDepartures(
