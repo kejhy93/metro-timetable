@@ -9,4 +9,6 @@ data class MetroLine(
     val stations: List<String>,
     val terminus0: String,
     val terminus1: String,
+    val terminus0DirectionId: Int,
+    val terminus1DirectionId: Int,
 )

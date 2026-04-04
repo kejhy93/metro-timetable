@@ -18,10 +18,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.hejnaluk.metrotimetable.ui.data.local.LineDataSource
-import org.koin.compose.koinInject
+import org.hejnaluk.metrotimetable.ui.presentation.line.LinesViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -30,10 +32,11 @@ fun StationScreen(
     onStationSelected: (station: String) -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit,
-    dataSource: LineDataSource = koinInject()
+    viewModel: LinesViewModel = koinViewModel()
 ) {
-    val line = dataSource.getLines().firstOrNull { it.id == lineId }
-    val stations = dataSource.getStations(lineId)
+    val lines by viewModel.lines.collectAsState()
+    val line = lines.firstOrNull { it.id == lineId }
+    val stations = line?.stations ?: emptyList()
 
     Scaffold(
         topBar = {

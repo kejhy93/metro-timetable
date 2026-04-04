@@ -6,6 +6,7 @@ import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -23,6 +24,9 @@ class MetroApiClient(engine: HttpClientEngine, private val baseUrl: String) {
             level = LogLevel.INFO
         }
     }
+
+    suspend fun fetchLines(): List<LineInfo> =
+        client.get("$baseUrl/pid/lines").body()
 
     suspend fun fetchDepartures(
         station: String,

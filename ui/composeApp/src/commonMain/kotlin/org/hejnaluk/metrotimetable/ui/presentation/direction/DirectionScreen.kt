@@ -17,14 +17,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.hejnaluk.metrotimetable.ui.data.local.LineDataSource
-import org.koin.compose.koinInject
-
-private const val DIRECTION_TERMINUS_0 = 1
-private const val DIRECTION_TERMINUS_1 = 0
+import org.hejnaluk.metrotimetable.ui.presentation.line.LinesViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,9 +33,10 @@ fun DirectionScreen(
     onDirectionSelected: (directionId: Int, destination: String) -> Unit,
     onBack: () -> Unit,
     onHome: () -> Unit,
-    dataSource: LineDataSource = koinInject()
+    viewModel: LinesViewModel = koinViewModel()
 ) {
-    val line = dataSource.getLines().firstOrNull { it.id == lineId }
+    val lines by viewModel.lines.collectAsState()
+    val line = lines.firstOrNull { it.id == lineId }
 
     Scaffold(
         topBar = {
@@ -70,13 +70,13 @@ fun DirectionScreen(
             if (line != null) {
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(DIRECTION_TERMINUS_0, line.terminus0) }
+                    onClick = { onDirectionSelected(line.terminus0DirectionId, line.terminus0) }
                 ) {
                     Text("→ ${line.terminus0}")
                 }
                 Button(
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { onDirectionSelected(DIRECTION_TERMINUS_1, line.terminus1) }
+                    onClick = { onDirectionSelected(line.terminus1DirectionId, line.terminus1) }
                 ) {
                     Text("→ ${line.terminus1}")
                 }
