@@ -2,6 +2,25 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+val gitVersion: Provider<String> = providers.exec {
+    commandLine("git", "describe", "--tags", "--always")
+    workingDir(rootProject.rootDir.parentFile)
+}.standardOutput.asText.map { it.trim().removePrefix("v") }
+
+val generateAppVersion by tasks.registering {
+    val version = gitVersion
+    val outputDir = layout.buildDirectory.dir("generated/appVersion/kotlin")
+    inputs.property("version", version)
+    outputs.dir(outputDir)
+    doLast {
+        val pkgDir = outputDir.get().asFile.resolve("org/hejnaluk/metrotimetable/ui")
+        pkgDir.mkdirs()
+        pkgDir.resolve("AppVersion.kt").writeText(
+            "package org.hejnaluk.metrotimetable.ui\n\nconst val APP_VERSION = \"${version.get()}\"\n"
+        )
+    }
+}
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidApplication)
@@ -46,6 +65,9 @@ kotlin {
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
+        }
+        commonMain {
+            kotlin.srcDir(generateAppVersion)
         }
         commonMain.dependencies {
             implementation(libs.compose.runtime)
