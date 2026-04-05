@@ -1,9 +1,11 @@
 package org.hejnaluk.metrotimetable.filter;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -13,10 +15,15 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 @Component
+@RequiredArgsConstructor
 @Slf4j
 public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
 
     private static final int MAX_BODY_LOG_LENGTH = 2000;
+    private static final String CLIENT_VERSION_HEADER = "X-Client-Version";
+    private static final String UNKNOWN_VERSION = "unknown";
+
+    private final MeterRegistry meterRegistry;
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -39,17 +46,22 @@ public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
     }
 
     private void logResponse(HttpServletRequest request, ContentCachingResponseWrapper response) {
+        String raw = request.getHeader(CLIENT_VERSION_HEADER);
+        String effectiveVersion = (raw == null || raw.trim().isEmpty()) ? UNKNOWN_VERSION : raw.trim();
+
+        meterRegistry.counter("client.requests", "version", effectiveVersion).increment();
+
         byte[] bodyBytes = response.getContentAsByteArray();
         if (bodyBytes.length == 0) {
-            log.info("Response: {} {} - status={}, body=<empty>",
-                    request.getMethod(), request.getRequestURI(), response.getStatus());
+            log.info("Response: {} {} - status={}, clientVersion={}, body=<empty>",
+                    request.getMethod(), request.getRequestURI(), response.getStatus(), effectiveVersion);
             return;
         }
         String body = new String(bodyBytes, StandardCharsets.UTF_8);
         if (body.length() > MAX_BODY_LOG_LENGTH) {
             body = body.substring(0, MAX_BODY_LOG_LENGTH) + "...[truncated]";
         }
-        log.info("Response: {} {} - status={}, body={}",
-                request.getMethod(), request.getRequestURI(), response.getStatus(), body);
+        log.info("Response: {} {} - status={}, clientVersion={}, body={}",
+                request.getMethod(), request.getRequestURI(), response.getStatus(), effectiveVersion, body);
     }
 }
