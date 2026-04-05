@@ -78,7 +78,7 @@ jobs:
 
       - name: Build wasmJs
         working-directory: ui
-        run: ./gradlew :composeApp:wasmJsBrowserDistribution
+        run: ./gradlew -Papp.version=${{ github.ref_name }} :composeApp:wasmJsBrowserDistribution
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
