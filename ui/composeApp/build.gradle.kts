@@ -2,14 +2,16 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-val gitVersion: Provider<String> = if (project.hasProperty("app.version")) {
-    providers.provider { (project.property("app.version") as String).removePrefix("v") }
-} else {
-    providers.exec {
-        commandLine("git", "describe", "--tags", "--always")
-        workingDir(rootProject.rootDir.parentFile)
-    }.standardOutput.asText.map { it.trim().removePrefix("v") }
-}
+val normalizeVersion: (String) -> String = { it.trim().removePrefix("v") }
+
+val gitVersion: Provider<String> = providers.gradleProperty("app.version")
+    .map(normalizeVersion)
+    .orElse(
+        providers.exec {
+            commandLine("git", "describe", "--tags", "--always")
+            workingDir(rootProject.rootDir.parentFile)
+        }.standardOutput.asText.map(normalizeVersion)
+    )
 
 val generateAppVersion by tasks.registering {
     val version = gitVersion
