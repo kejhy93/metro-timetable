@@ -1,6 +1,5 @@
 package org.hejnaluk.metrotimetable.filter;
 
-import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
 
     private static final int MAX_BODY_LOG_LENGTH = 2000;
+    private static final String CLIENT_VERSION_HEADER = "X-Client-Version";
     private static final String UNKNOWN_VERSION = "unknown";
 
     private final MeterRegistry meterRegistry;
@@ -46,19 +46,15 @@ public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
     }
 
     private void logResponse(HttpServletRequest request, ContentCachingResponseWrapper response) {
-        String clientVersion = request.getHeader("X-Client-Version");
-        String effectiveVersion = clientVersion != null ? clientVersion : UNKNOWN_VERSION;
+        String raw = request.getHeader(CLIENT_VERSION_HEADER);
+        String effectiveVersion = (raw == null || raw.trim().isEmpty()) ? UNKNOWN_VERSION : raw.trim();
 
-        Counter.builder("client.requests")
-                .description("Number of requests per client version")
-                .tag("version", effectiveVersion)
-                .register(meterRegistry)
-                .increment();
+        meterRegistry.counter("client.requests", "version", effectiveVersion).increment();
 
         byte[] bodyBytes = response.getContentAsByteArray();
         if (bodyBytes.length == 0) {
             log.info("Response: {} {} - status={}, clientVersion={}, body=<empty>",
-                    request.getMethod(), request.getRequestURI(), response.getStatus(), clientVersion);
+                    request.getMethod(), request.getRequestURI(), response.getStatus(), effectiveVersion);
             return;
         }
         String body = new String(bodyBytes, StandardCharsets.UTF_8);
@@ -66,6 +62,6 @@ public class ResponseBodyLoggingFilter extends OncePerRequestFilter {
             body = body.substring(0, MAX_BODY_LOG_LENGTH) + "...[truncated]";
         }
         log.info("Response: {} {} - status={}, clientVersion={}, body={}",
-                request.getMethod(), request.getRequestURI(), response.getStatus(), clientVersion, body);
+                request.getMethod(), request.getRequestURI(), response.getStatus(), effectiveVersion, body);
     }
 }

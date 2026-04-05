@@ -17,6 +17,8 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.hejnaluk.metrotimetable.ui.APP_VERSION
 
+private const val CLIENT_VERSION_HEADER = "X-Client-Version"
+
 class MetroApiClient(engine: HttpClientEngine, private val baseUrl: String) {
 
     private val client = HttpClient(engine) {
@@ -27,7 +29,7 @@ class MetroApiClient(engine: HttpClientEngine, private val baseUrl: String) {
             level = LogLevel.INFO
         }
         defaultRequest {
-            header("X-Client-Version", APP_VERSION)
+            header(CLIENT_VERSION_HEADER, APP_VERSION)
         }
     }
 
