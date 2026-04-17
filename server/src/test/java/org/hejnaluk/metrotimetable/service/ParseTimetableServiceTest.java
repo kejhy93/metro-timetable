@@ -8,14 +8,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+import org.hejnaluk.metrotimetable.dto.TripDetail;
+
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -339,6 +343,67 @@ class ParseTimetableServiceTest {
         List<ParseTimetableService.Trip> result = service.parseTrip(Set.of("L991"), Set.of("1111100-1"));
 
         assertThat(result).hasSize(2).allMatch(t -> t.routeId().equals("L991"));
+    }
+
+    // --- getTripDetail tests ---
+
+    @Test
+    void getTripDetail_returnsAllStopsForMatchingTrip() {
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stopsAt(LocalTime.of(13, 0), "Depo Hostivař", "Muzeum", "Zličín")
+        ));
+        // Muzeum is at index 1, departure time = 13:01
+        Instant departureInstant = LocalTime.of(13, 1).atDate(FIXED_TODAY).atZone(PRAGUE_ZONE).toInstant();
+
+        Optional<TripDetail> result = service.getTripDetail("L991", 0, departureInstant);
+
+        assertThat(result).isPresent();
+        TripDetail detail = result.get();
+        assertThat(detail.routeId()).isEqualTo("L991");
+        assertThat(detail.directionId()).isZero();
+        assertThat(detail.destination()).isEqualTo("Zličín");
+        assertThat(detail.stops()).hasSize(3);
+        assertThat(detail.stops().get(0).stopName()).isEqualTo("Depo Hostivař");
+        assertThat(detail.stops().get(1).stopName()).isEqualTo("Muzeum");
+        assertThat(detail.stops().get(2).stopName()).isEqualTo("Zličín");
+        // First stop has null arrivalTime (terminus — no inbound service)
+        assertThat(detail.stops().get(0).arrivalTime()).isNull();
+        // Last stop has null departureTime (train terminates here)
+        assertThat(detail.stops().get(2).departureTime()).isNull();
+        // Middle stop has both times set
+        assertThat(detail.stops().get(1).arrivalTime()).isNotNull();
+        assertThat(detail.stops().get(1).departureTime()).isNotNull();
+    }
+
+    @Test
+    void getTripDetail_returnsEmpty_whenTripNotFound() {
+        populateCache("L991-0", Map.of(
+                LocalTime.of(13, 0), stopsAt(LocalTime.of(13, 0), "Depo Hostivař", "Muzeum", "Zličín")
+        ));
+        Instant notFound = LocalTime.of(15, 0).atDate(FIXED_TODAY).atZone(PRAGUE_ZONE).toInstant();
+
+        Optional<TripDetail> result = service.getTripDetail("L991", 0, notFound);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getTripDetail_convertsLocalTimeToInstant_correctlyForPostMidnightTrip() {
+        // A post-midnight GTFS trip (e.g. originally "24:30:00") gets normalised to 00:30 via modulo.
+        // The server must convert it to an Instant using today's date (not yesterday's).
+        LocalTime postMidnight = LocalTime.of(0, 30);
+        populateCache("L991-0", Map.of(
+                postMidnight, stopsAt(postMidnight, "Depo Hostivař", "Muzeum")
+        ));
+        // Muzeum is at index 1, arrival = 00:31
+        Instant departureInstant = LocalTime.of(0, 30).atDate(FIXED_TODAY).atZone(PRAGUE_ZONE).toInstant();
+
+        Optional<TripDetail> result = service.getTripDetail("L991", 0, departureInstant);
+
+        assertThat(result).isPresent();
+        // Second stop's arrivalTime should be 00:31 on FIXED_TODAY
+        Instant expectedArrival = LocalTime.of(0, 31).atDate(FIXED_TODAY).atZone(PRAGUE_ZONE).toInstant();
+        assertThat(result.get().stops().get(1).arrivalTime()).isEqualTo(expectedArrival);
     }
 
     // --- helpers ---
