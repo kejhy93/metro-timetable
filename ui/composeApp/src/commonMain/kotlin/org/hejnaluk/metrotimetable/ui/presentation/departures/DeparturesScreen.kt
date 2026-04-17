@@ -45,6 +45,7 @@ fun DeparturesScreen(
     routeId: String? = null,
     onBack: () -> Unit,
     onHome: () -> Unit,
+    onDepartureTapped: (TrainDeparture) -> Unit = {},
     viewModel: DeparturesViewModel = koinViewModel()
 ) {
     LaunchedEffect(station, directionId, routeId) {
@@ -90,7 +91,8 @@ fun DeparturesScreen(
 
                 is DeparturesState.Success -> DeparturesList(
                     departures = s.departures,
-                    updatedAt = s.updatedAt
+                    updatedAt = s.updatedAt,
+                    onDepartureTapped = onDepartureTapped
                 )
             }
         }
@@ -98,7 +100,11 @@ fun DeparturesScreen(
 }
 
 @Composable
-private fun DeparturesList(departures: List<TrainDeparture>, updatedAt: LocalTime) {
+private fun DeparturesList(
+    departures: List<TrainDeparture>,
+    updatedAt: LocalTime,
+    onDepartureTapped: (TrainDeparture) -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = "Updated: $updatedAt",
@@ -107,20 +113,21 @@ private fun DeparturesList(departures: List<TrainDeparture>, updatedAt: LocalTim
         )
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(departures) { departure ->
-                DepartureItem(departure = departure)
+                DepartureItem(departure = departure, onClick = { onDepartureTapped(departure) })
             }
         }
     }
 }
 
 @Composable
-private fun DepartureItem(departure: TrainDeparture) {
+private fun DepartureItem(departure: TrainDeparture, onClick: () -> Unit) {
     val departureInstant = Instant.parse(departure.departureTime)
     val minutesUntil = minutesUntil(departureInstant)
     val localTime = departureInstant
         .toLocalDateTime(TimeZone.currentSystemDefault()).time
 
     Card(
+        onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
