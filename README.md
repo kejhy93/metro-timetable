@@ -15,7 +15,9 @@ This repository contains a Java-based application that provides metro timetable 
 - Fetches and parses Prague PID GTFS timetable data automatically.
 - Filters trips by active service IDs for today's date using `calendar.txt` (weekly schedule) and `calendar_dates.txt` (public holidays and exception overrides), so only trips scheduled to run today appear in results.
 - Queries upcoming train departures by station name with optional direction filtering.
+- Returns the full stop list for any specific trip, with arrival/departure times as ISO 8601 instants.
 - Caches parsed data in-memory; re-downloads only when the data is older than a configurable threshold.
+- Exposes UI refresh intervals via `GET /pid/config` so they can be tuned server-side without a client release.
 - Exposes Prometheus metrics for observability.
 - GTFS format: https://gtfs.org/documentation/schedule/reference/#stop_timestxt
 
@@ -72,11 +74,74 @@ curl -X POST http://localhost:8080/pid/station \
   {
     "routeId": "L991",
     "directionId": 0,
-    "departureTime": "14:32:00",
+    "departureTime": "2026-04-17T12:32:00Z",
     "destination": "Depo Hostivař",
-    "upcomingStations": ["Muzeum", "Náměstí Míru", "Jiřího z Poděbrad", "...]
+    "upcomingStations": ["Muzeum", "Náměstí Míru", "Jiřího z Poděbrad", "..."]
   }
 ]
+```
+
+### `GET /pid/trip`
+
+Returns all stops for a specific trip. Pass `departureTime` exactly as received in the `TrainDeparture.departureTime` field.
+
+**Query parameters:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `routeId` | string | yes | Route identifier (e.g. `"L991"`) |
+| `directionId` | integer | yes | Direction: `0` or `1` |
+| `departureTime` | string | yes | ISO 8601 instant from the `TrainDeparture.departureTime` field |
+
+**Example:**
+
+```bash
+curl "http://localhost:8080/pid/trip?routeId=L991&directionId=0&departureTime=2026-04-17T12:32:00Z"
+```
+
+**Response** — `TripDetail` object:
+
+```json
+{
+  "routeId": "L991",
+  "directionId": 0,
+  "destination": "Depo Hostivař",
+  "stops": [
+    { "stopName": "Zličín",          "arrivalTime": null,                  "departureTime": "2026-04-17T12:20:00Z" },
+    { "stopName": "Muzeum",          "arrivalTime": "2026-04-17T12:32:00Z","departureTime": "2026-04-17T12:32:00Z" },
+    { "stopName": "Depo Hostivař",   "arrivalTime": "2026-04-17T12:45:00Z","departureTime": null }
+  ]
+}
+```
+
+`arrivalTime` is `null` for the first stop; `departureTime` is `null` for the last stop.
+
+Returns `404` when the trip is no longer in cache (e.g. data refreshed between the departures fetch and the tap). Returns `400` when `departureTime` is not a valid ISO 8601 instant or a required parameter is missing.
+
+### `GET /pid/config`
+
+Returns the server-configured UI refresh intervals. Clients should re-fetch this periodically so interval changes take effect without a client release.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/pid/config
+```
+
+**Response:**
+
+```json
+{
+  "departuresRefreshIntervalSeconds": 30,
+  "tripDetailRefreshIntervalSeconds": 10
+}
+```
+
+Configured via `application.properties`:
+
+```properties
+pid.refresh.departures.interval.seconds=30
+pid.refresh.trip-detail.interval.seconds=10
 ```
 
 ## Monitoring
@@ -138,12 +203,18 @@ ui/
     └── src/
         ├── commonMain/       # Shared Compose UI and business logic
         │   ├── data/
-        │   │   ├── api/      # Ktor HTTP client → POST /pid/station
+        │   │   ├── api/      # Ktor HTTP client (station, trip detail, config)
         │   │   ├── local/    # Hard-coded metro line/station data
+        │   │   ├── AppConfigStore.kt  # Polls GET /pid/config; StateFlow<AppConfig>
         │   │   └── MetroRepository.kt
         │   ├── di/           # Koin dependency injection module
         │   ├── navigation/   # Type-safe Compose Navigation
-        │   └── presentation/ # Screens: Line → Station → Direction → Departures
+        │   └── presentation/
+        │       ├── line/       # Line selection screen
+        │       ├── station/    # Station list screen
+        │       ├── direction/  # Direction selection screen
+        │       ├── departures/ # Upcoming departures (tappable cards)
+        │       └── detail/     # Train detail screen (all stops, highlights)
         ├── androidMain/      # Android entry point (MainActivity)
         ├── iosMain/          # iOS entry point (MainViewController)
         ├── jvmMain/          # Desktop entry point
@@ -153,12 +224,13 @@ ui/
 
 ### User flow
 
-**Line** → **Station** → **Direction** → **Departures**
+**Line** → **Station** → **Direction** → **Departures** → **Train Detail**
 
 1. Pick a metro line (A / B / C, colour-coded).
 2. Pick a station along that line.
 3. Pick a direction (terminus 0 or terminus 1).
-4. View upcoming train departures fetched from the backend.
+4. View upcoming train departures. Tap a card to open the train detail screen.
+5. See all stops for that trip with scheduled times and a relative countdown. Two distinct highlights show where the train currently is (filled `primaryContainer`) and where your station is (secondary-colour border). The list auto-scrolls to the train's current position on first load and refreshes every 10 seconds.
 
 ### Key dependencies
 
@@ -173,7 +245,9 @@ ui/
 
 ### Backend connection
 
-`MetroApiClient` calls `POST /pid/station`. In production the nginx container reverse-proxies `/pid/` to the backend `metro-timetable` service, so the frontend and API share the same origin (`https://hejnaluk.dev`). To point at a local backend, change `BASE_URL` in `ui/composeApp/src/commonMain/kotlin/.../data/api/MetroApiClient.kt`.
+`MetroApiClient` calls `POST /pid/station`, `GET /pid/trip`, and `GET /pid/config`. In production the nginx container reverse-proxies `/pid/` to the backend `metro-timetable` service, so the frontend and API share the same origin (`https://hejnaluk.dev`). To point at a local backend, change `BASE_URL` in `ui/composeApp/src/commonMain/kotlin/.../data/api/MetroApiClient.kt`.
+
+The app fetches `GET /pid/config` on startup and re-polls it every 60 seconds. If the endpoint is unreachable, hardcoded defaults (30 s / 10 s) are used and polling continues in the background.
 
 ### Build and run
 
