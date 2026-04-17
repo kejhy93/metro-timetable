@@ -8,9 +8,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.hejnaluk.metrotimetable.ui.currentLocalTime
+import org.hejnaluk.metrotimetable.ui.data.AppConfigStore
 import org.hejnaluk.metrotimetable.ui.data.MetroRepository
 
-class DeparturesViewModel(private val repository: MetroRepository) : ViewModel() {
+class DeparturesViewModel(
+    private val repository: MetroRepository,
+    private val appConfigStore: AppConfigStore
+) : ViewModel() {
 
     private val _state = MutableStateFlow<DeparturesState>(DeparturesState.Loading)
     val state: StateFlow<DeparturesState> = _state.asStateFlow()
@@ -19,7 +23,7 @@ class DeparturesViewModel(private val repository: MetroRepository) : ViewModel()
         viewModelScope.launch {
             while (true) {
                 load(station, directionId, routeId)
-                delay(REFRESH_INTERVAL_MS)
+                delay(appConfigStore.config.value.departuresRefreshIntervalSeconds * 1_000L)
             }
         }
     }
@@ -36,9 +40,5 @@ class DeparturesViewModel(private val repository: MetroRepository) : ViewModel()
                 _state.value = DeparturesState.Error(error.message ?: "Unknown error")
             }
         )
-    }
-
-    companion object {
-        private const val REFRESH_INTERVAL_MS = 30_000L
     }
 }

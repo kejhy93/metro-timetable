@@ -9,6 +9,7 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
@@ -35,6 +36,20 @@ class MetroApiClient(engine: HttpClientEngine, private val baseUrl: String) {
 
     suspend fun fetchLines(): List<LineInfo> =
         client.get("$baseUrl/pid/lines").body()
+
+    suspend fun fetchTripDetail(
+        routeId: String,
+        directionId: Int,
+        departureTime: String
+    ): TripDetail =
+        client.get("$baseUrl/pid/trip") {
+            parameter("routeId", routeId)
+            parameter("directionId", directionId)
+            parameter("departureTime", departureTime)
+        }.body()
+
+    suspend fun fetchConfig(): AppConfig =
+        client.get("$baseUrl/pid/config").body()
 
     suspend fun fetchDepartures(
         station: String,
