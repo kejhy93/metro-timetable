@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
+import org.hejnaluk.metrotimetable.dto.TripDetail;
+import org.hejnaluk.metrotimetable.dto.TripStop;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -414,6 +416,49 @@ public class ParseTimetableService {
      */
     private static String getFormattedTime(LocalTime localTime) {
         return TIME_FORMATTER.format(localTime);
+    }
+
+    /**
+     * Returns full trip details for the given route, direction, and departure time.
+     * <p>
+     * Scans the cached trips for {@code routeId-directionId} and finds the first trip containing
+     * a stop whose {@code arrivalTime} or {@code departureTime} (as Prague local time) matches the
+     * provided {@link Instant}. This allows the client to pass the departure time at any stop in
+     * the trip — typically the departure time from the station shown in the departures list.
+     * <p>
+     * The first stop's {@code arrivalTime} is returned as {@code null} (terminus — no inbound service).
+     * The last stop's {@code departureTime} is returned as {@code null} (train terminates here).
+     *
+     * @param routeId       the route identifier (e.g. {@code "L991"})
+     * @param directionId   the direction (0 or 1)
+     * @param departureTime an {@link Instant} whose Prague-local time matches a stop in the target trip
+     * @return the {@link TripDetail} if a matching trip is found, or {@link Optional#empty()} if not
+     */
+    public Optional<TripDetail> getTripDetail(String routeId, int directionId, Instant departureTime) {
+        final TimetableData snapshot = timetableData;
+        final String key = routeId + "-" + directionId;
+        final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
+        if (trips == null) return Optional.empty();
+
+        final LocalTime targetTime = departureTime.atZone(PRAGUE_ZONE).toLocalTime();
+        final LocalDate today = getToday();
+
+        return trips.values().stream()
+                .filter(stops -> stops.stream()
+                        .anyMatch(s -> s.departureTime().equals(targetTime) || s.arrivalTime().equals(targetTime)))
+                .findFirst()
+                .map(stops -> {
+                    final List<TripStop> tripStops = new ArrayList<>();
+                    for (int i = 0; i < stops.size(); i++) {
+                        final CompleteStop cs = stops.get(i);
+                        final Instant arrival = (i == 0) ? null
+                                : cs.arrivalTime().atDate(today).atZone(PRAGUE_ZONE).toInstant();
+                        final Instant departure = (i == stops.size() - 1) ? null
+                                : cs.departureTime().atDate(today).atZone(PRAGUE_ZONE).toInstant();
+                        tripStops.add(new TripStop(cs.stop().stopName(), arrival, departure));
+                    }
+                    return new TripDetail(routeId, directionId, stops.getLast().stop().stopName(), tripStops);
+                });
     }
 
     // --- Package-private test support ---

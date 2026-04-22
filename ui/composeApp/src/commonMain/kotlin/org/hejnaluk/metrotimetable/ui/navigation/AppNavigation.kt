@@ -7,6 +7,7 @@ import androidx.navigation.toRoute
 import androidx.compose.runtime.Composable
 import kotlinx.serialization.Serializable
 import org.hejnaluk.metrotimetable.ui.presentation.departures.DeparturesScreen
+import org.hejnaluk.metrotimetable.ui.presentation.detail.TrainDetailScreen
 import org.hejnaluk.metrotimetable.ui.presentation.direction.DirectionScreen
 import org.hejnaluk.metrotimetable.ui.presentation.line.LineScreen
 import org.hejnaluk.metrotimetable.ui.presentation.station.StationScreen
@@ -26,6 +27,14 @@ internal data class DeparturesRoute(
     val station: String,
     val directionId: Int,
     val destination: String
+)
+
+@Serializable
+internal data class TrainDetailRoute(
+    val routeId: String,
+    val directionId: Int,
+    val departureTime: String,
+    val station: String
 )
 
 @Composable
@@ -73,7 +82,27 @@ fun AppNavigation() {
                 destination = route.destination,
                 routeId = route.lineId,
                 onBack = { navController.popBackStack() },
-                onHome = { navController.popBackStack(LineRoute, inclusive = false) }
+                onHome = { navController.popBackStack(LineRoute, inclusive = false) },
+                onDepartureTapped = { departure ->
+                    navController.navigate(
+                        TrainDetailRoute(
+                            routeId = departure.routeId,
+                            directionId = departure.directionId,
+                            departureTime = departure.departureTime,
+                            station = route.station
+                        )
+                    )
+                }
+            )
+        }
+        composable<TrainDetailRoute> { backStackEntry ->
+            val route: TrainDetailRoute = backStackEntry.toRoute()
+            TrainDetailScreen(
+                routeId = route.routeId,
+                directionId = route.directionId,
+                departureTime = route.departureTime,
+                station = route.station,
+                onBack = { navController.popBackStack() }
             )
         }
     }

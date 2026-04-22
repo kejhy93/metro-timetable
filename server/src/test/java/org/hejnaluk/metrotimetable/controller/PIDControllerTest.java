@@ -1,8 +1,11 @@
 package org.hejnaluk.metrotimetable.controller;
 
+import org.hejnaluk.metrotimetable.dto.AppConfig;
 import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.StationRequest;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
+import org.hejnaluk.metrotimetable.dto.TripDetail;
+import org.hejnaluk.metrotimetable.dto.TripStop;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
 import org.hejnaluk.metrotimetable.service.TimetableRefreshService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,12 +21,14 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class PIDControllerTest {
@@ -37,14 +42,23 @@ class PIDControllerTest {
     private MockMvc mockMvc;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
         controller = new PIDController(timetableRefreshService, parseTimetableService);
+        // Inject @Value fields that Spring would normally populate
+        setField(controller, "departuresRefreshIntervalSeconds", 30L);
+        setField(controller, "tripDetailRefreshIntervalSeconds", 10L);
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setValidator(validator)
                 .build();
+    }
+
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        java.lang.reflect.Field f = target.getClass().getDeclaredField(fieldName);
+        f.setAccessible(true);
+        f.set(target, value);
     }
 
     @Test
@@ -192,5 +206,79 @@ class PIDControllerTest {
 
         mockMvc.perform(get("/pid/lines"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void getTripDetail_callsService() {
+        String routeId = "L991";
+        int directionId = 0;
+        Instant departureTime = Instant.parse("2026-03-30T12:00:00Z");
+        when(parseTimetableService.getTripDetail(routeId, directionId, departureTime)).thenReturn(Optional.empty());
+
+        controller.getTripDetail(routeId, directionId, departureTime.toString());
+
+        Mockito.verify(parseTimetableService, times(1)).getTripDetail(routeId, directionId, departureTime);
+    }
+
+    @Test
+    void getTripDetail_returnsServiceResult() {
+        String routeId = "L991";
+        int directionId = 0;
+        Instant departureTime = Instant.parse("2026-03-30T12:00:00Z");
+        TripDetail detail = new TripDetail(routeId, directionId, "Zličín", List.of(
+                new TripStop("Depo Hostivař", null, departureTime),
+                new TripStop("Zličín", departureTime, null)
+        ));
+        when(parseTimetableService.getTripDetail(routeId, directionId, departureTime)).thenReturn(Optional.of(detail));
+
+        var response = controller.getTripDetail(routeId, directionId, departureTime.toString());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo(detail);
+    }
+
+    @Test
+    void getTripDetail_returns404_whenNotFound() throws Exception {
+        when(parseTimetableService.getTripDetail("L991", 0, Instant.parse("2026-03-30T12:00:00Z")))
+                .thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/pid/trip")
+                        .param("routeId", "L991")
+                        .param("directionId", "0")
+                        .param("departureTime", "2026-03-30T12:00:00Z"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getTripDetail_rejects_missingRouteId() throws Exception {
+        mockMvc.perform(get("/pid/trip")
+                        .param("directionId", "0")
+                        .param("departureTime", "2026-03-30T12:00:00Z"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTripDetail_rejects_missingDepartureTime() throws Exception {
+        mockMvc.perform(get("/pid/trip")
+                        .param("routeId", "L991")
+                        .param("directionId", "0"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getTripDetail_rejects_invalidDepartureTimeFormat() throws Exception {
+        mockMvc.perform(get("/pid/trip")
+                        .param("routeId", "L991")
+                        .param("directionId", "0")
+                        .param("departureTime", "not-an-instant"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getConfig_returnsConfiguredValues() throws Exception {
+        mockMvc.perform(get("/pid/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.departuresRefreshIntervalSeconds").value(30))
+                .andExpect(jsonPath("$.tripDetailRefreshIntervalSeconds").value(10));
     }
 }

@@ -3,19 +3,25 @@ package org.hejnaluk.metrotimetable.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.dto.AppConfig;
 import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
+import org.hejnaluk.metrotimetable.dto.TripDetail;
 import org.hejnaluk.metrotimetable.service.ParseTimetableService;
 import org.hejnaluk.metrotimetable.service.TimetableRefreshService;
 import org.hejnaluk.metrotimetable.dto.StationRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @RestController
@@ -26,6 +32,12 @@ public class PIDController {
 
     private final TimetableRefreshService timetableRefreshService;
     private final ParseTimetableService parseTimetableService;
+
+    @Value("${pid.refresh.departures.interval.seconds:30}")
+    private long departuresRefreshIntervalSeconds;
+
+    @Value("${pid.refresh.trip-detail.interval.seconds:10}")
+    private long tripDetailRefreshIntervalSeconds;
 
     /**
      * Triggers a full timetable download-and-parse cycle.
@@ -64,6 +76,50 @@ public class PIDController {
     public ResponseEntity<List<LineInfo>> getLines() {
         log.info("GET /pid/lines - line list requested");
         return ResponseEntity.ok(parseTimetableService.getLines());
+    }
+
+    /**
+     * Returns all stops for a specific trip identified by route, direction, and departure time.
+     * <p>
+     * The {@code departureTime} must be an ISO 8601 instant whose Prague-local time matches
+     * the departure time of any stop in the target trip (e.g. the departure time shown in the
+     * departures list for the user's station).
+     *
+     * @param routeId       the route identifier (e.g. {@code "L991"})
+     * @param directionId   the direction (0 or 1)
+     * @param departureTime ISO 8601 instant identifying the trip
+     * @return {@code 200 OK} with the {@link TripDetail}, or {@code 404} if the trip is not found,
+     *         or {@code 400} if {@code departureTime} is not a valid ISO 8601 instant
+     */
+    @GetMapping("/trip")
+    public ResponseEntity<TripDetail> getTripDetail(
+            @RequestParam String routeId,
+            @RequestParam int directionId,
+            @RequestParam String departureTime) {
+        Instant parsedTime;
+        try {
+            parsedTime = Instant.parse(departureTime);
+        } catch (DateTimeParseException e) {
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("GET /pid/trip - routeId={}, directionId={}, departureTime={}", routeId, directionId, parsedTime);
+        return parseTimetableService.getTripDetail(routeId, directionId, parsedTime)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Returns the server-side refresh interval configuration for UI clients.
+     * <p>
+     * Clients should re-fetch this endpoint periodically so that interval changes
+     * take effect without requiring a client release.
+     *
+     * @return {@code 200 OK} with {@link AppConfig} containing the configured intervals
+     */
+    @GetMapping("/config")
+    public ResponseEntity<AppConfig> getConfig() {
+        log.info("GET /pid/config - config requested");
+        return ResponseEntity.ok(new AppConfig(departuresRefreshIntervalSeconds, tripDetailRefreshIntervalSeconds));
     }
 
 }

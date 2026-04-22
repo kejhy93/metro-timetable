@@ -2,6 +2,7 @@ package org.hejnaluk.metrotimetable.ui.data
 
 import org.hejnaluk.metrotimetable.ui.data.api.MetroApiClient
 import org.hejnaluk.metrotimetable.ui.data.api.TrainDeparture
+import org.hejnaluk.metrotimetable.ui.data.api.TripDetail
 import org.hejnaluk.metrotimetable.ui.data.local.LineDataSource
 import org.hejnaluk.metrotimetable.ui.data.local.MetroLine
 
@@ -45,4 +46,11 @@ class MetroRepository(
         routeId: String? = null
     ): Result<List<TrainDeparture>> =
         runCatching { apiClient.fetchDepartures(station, direction, limit, routeId) }
+
+    suspend fun fetchTripDetail(
+        routeId: String,
+        directionId: Int,
+        departureTime: String
+    ): Result<TripDetail> =
+        runCatching { apiClient.fetchTripDetail(routeId, directionId, departureTime) }
 }
