@@ -2,6 +2,7 @@ package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.client.PIDClient;
@@ -9,6 +10,10 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +23,21 @@ public class TimetableRefreshService {
     private final PIDClient pidClient;
     private final ParseTimetableService parseTimetableService;
     private final MeterRegistry meterRegistry;
+
+    private final Map<String, Counter> refreshCounters = new HashMap<>();
+
+    @PostConstruct
+    void registerMetrics() {
+        for (String trigger : List.of("startup", "scheduled", "manual")) {
+            for (String outcome : List.of("success", "failure")) {
+                refreshCounters.put(trigger + "." + outcome, Counter.builder("timetable.refresh.total")
+                        .description("Number of timetable refresh attempts by trigger and outcome")
+                        .tag("trigger", trigger)
+                        .tag("outcome", outcome)
+                        .register(meterRegistry));
+            }
+        }
+    }
 
     /**
      * Warm the cache on startup. Always parses after startup regardless of whether new data
@@ -75,10 +95,6 @@ public class TimetableRefreshService {
     }
 
     private Counter refreshCounter(String trigger, String outcome) {
-        return Counter.builder("timetable.refresh.total")
-                .description("Number of timetable refresh attempts by trigger and outcome")
-                .tag("trigger", trigger)
-                .tag("outcome", outcome)
-                .register(meterRegistry);
+        return refreshCounters.get(trigger + "." + outcome);
     }
 }

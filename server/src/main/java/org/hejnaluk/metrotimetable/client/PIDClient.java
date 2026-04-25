@@ -44,6 +44,11 @@ public class PIDClient {
     private final File folder;
     private final MeterRegistry meterRegistry;
 
+    private final Timer downloadTimer;
+    private final Counter downloadSkippedCounter;
+    private final Counter downloadSuccessCounter;
+    private final Counter downloadFailureCounter;
+
     @Autowired
     public PIDClient(@Value("${pid.client.path:''}") String pathToFile, MeterRegistry meterRegistry) {
         this.pathToFile = pathToFile;
@@ -64,6 +69,13 @@ public class PIDClient {
                 log.error("Failed to create folder {}", folder.getAbsolutePath());
             }
         }
+
+        downloadTimer = Timer.builder("gtfs.download.duration")
+                .description("Time taken to download the GTFS ZIP from the remote source")
+                .register(meterRegistry);
+        downloadSkippedCounter = downloadCounter("skipped");
+        downloadSuccessCounter = downloadCounter("success");
+        downloadFailureCounter = downloadCounter("failure");
     }
 
     /**
@@ -75,14 +87,11 @@ public class PIDClient {
         log.info("PIDClient address is: {}", pathToFile);
         if (!isDoClientCall()) {
             log.info("Client call is not needed");
-            downloadCounter("skipped").increment();
+            downloadSkippedCounter.increment();
             return false;
         }
 
         try {
-            Timer downloadTimer = Timer.builder("gtfs.download.duration")
-                    .description("Time taken to download the GTFS ZIP from the remote source")
-                    .register(meterRegistry);
             Timer.Sample downloadSample = Timer.start();
             byte[] zipData = restClient.get()
                     .header(HttpHeaders.ACCEPT, "application/zip")
@@ -99,10 +108,10 @@ public class PIDClient {
 
             writeSuccessful();
             log.info("All files are downloaded and extracted successfully in memory!");
-            downloadCounter("success").increment();
+            downloadSuccessCounter.increment();
             return true;
         } catch (Exception e) {
-            downloadCounter("failure").increment();
+            downloadFailureCounter.increment();
             throw e;
         }
     }
