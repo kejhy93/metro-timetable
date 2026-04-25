@@ -62,6 +62,7 @@ class ParseTimetableServiceTest {
                 return FIXTURE_DIR;
             }
         };
+        service.registerGauges();
         setMaxLimit(service, 15);
         service.resetForTest();
     }

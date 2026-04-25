@@ -1,7 +1,9 @@
 package org.hejnaluk.metrotimetable.service;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -181,6 +184,50 @@ public class ParseTimetableService {
     }
 
     private volatile TimetableData timetableData = TimetableData.empty();
+    /** Advanced only on a successful parse; reads from the cache-age gauge reflect the last good refresh. */
+    private volatile Instant lastRefreshTime = Instant.EPOCH;
+
+    private Timer fileParseTimer;
+    private Timer cacheBuildTimer;
+    private Timer stationQueryFoundTimer;
+    private Timer stationQueryNotFoundTimer;
+    private Timer tripQueryFoundTimer;
+    private Timer tripQueryNotFoundTimer;
+
+    @PostConstruct
+    void registerGauges() {
+        Gauge.builder("timetable.cache.age.seconds", this,
+                        s -> Duration.between(s.lastRefreshTime, Instant.now()).toSeconds())
+                .description("Seconds since the last successful timetable parse")
+                .register(meterRegistry);
+        Gauge.builder("timetable.cache.trips.total", this,
+                        s -> s.timetableData.routeCache().values().stream().mapToInt(Map::size).sum())
+                .description("Total number of trips currently loaded in the route cache")
+                .register(meterRegistry);
+
+        fileParseTimer = Timer.builder("file.parse")
+                .description("Time taken to parse files")
+                .register(meterRegistry);
+        cacheBuildTimer = Timer.builder("create.cache")
+                .description("Time taken to create cache")
+                .register(meterRegistry);
+        stationQueryFoundTimer = Timer.builder("station.query")
+                .description("Time taken to query trains for a station")
+                .tag("found", "true")
+                .register(meterRegistry);
+        stationQueryNotFoundTimer = Timer.builder("station.query")
+                .description("Time taken to query trains for a station")
+                .tag("found", "false")
+                .register(meterRegistry);
+        tripQueryFoundTimer = Timer.builder("trip.query")
+                .description("Time taken to look up a trip detail")
+                .tag("found", "true")
+                .register(meterRegistry);
+        tripQueryNotFoundTimer = Timer.builder("trip.query")
+                .description("Time taken to look up a trip detail")
+                .tag("found", "false")
+                .register(meterRegistry);
+    }
 
     /**
      * Downloads (if stale), parses all GTFS files, and atomically replaces the in-memory cache.
@@ -195,10 +242,7 @@ public class ParseTimetableService {
      */
     public void parseTimetableFiles() {
         log.info("----------------------- PARSING START ------------------------");
-        io.micrometer.core.instrument.Timer fileParseTimer = io.micrometer.core.instrument.Timer.builder("file.parse")
-                .description("Time taken to parse files")
-                .register(meterRegistry);
-        io.micrometer.core.instrument.Timer.Sample fileParseTimeSample = Timer.start();
+        Timer.Sample fileParseTimeSample = Timer.start();
 
         // Phase 1: Determine active services synchronously (two small files, ~ms),
         // then parse route stop IDs and trips in parallel.
@@ -223,10 +267,7 @@ public class ParseTimetableService {
         log.info("----------------------- PARSING DONE ------------------------");
 
         log.info("------------------------ CACHE START ------------------------");
-        io.micrometer.core.instrument.Timer cacheBuildTimer = io.micrometer.core.instrument.Timer.builder("create.cache")
-                .description("Time taken to create cache")
-                .register(meterRegistry);
-        io.micrometer.core.instrument.Timer.Sample cacheBuildTimeSample = Timer.start();
+        Timer.Sample cacheBuildTimeSample = Timer.start();
 
         // Stream stop_times.txt trip-by-trip directly into the cache.
         // ASSUMPTION: rows are sorted by trip_id (standard GTFS ordering from PID).
@@ -252,6 +293,7 @@ public class ParseTimetableService {
 
         // Atomic swap: readers always see a complete, consistent snapshot.
         timetableData = new TimetableData(newRouteCache, newStationIndex);
+        lastRefreshTime = Instant.now();
 
         cacheBuildTimeSample.stop(cacheBuildTimer);
         log.info("------------------------ CACHE DONE: {} route-direction keys, {} stations ------------------------",
@@ -306,16 +348,13 @@ public class ParseTimetableService {
      * @return list of upcoming {@link TrainDeparture}s sorted by departure time, or an empty list if the station is not found
      */
     public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit, String routeId) {
-        Timer timer = Timer.builder("station.query")
-                .description("Time taken to query trains for a station")
-                .register(meterRegistry);
         Timer.Sample sample = Timer.start();
 
         // Snapshot once — guarantees a consistent route cache + station index pair.
         final TimetableData snapshot = timetableData;
         final Map<String, Integer> keyToStopIndex = snapshot.stationIndex().get(stationName.toLowerCase());
         if (keyToStopIndex == null) {
-            sample.stop(timer);
+            sample.stop(stationQueryNotFoundTimer);
             return List.of();
         }
 
@@ -330,7 +369,7 @@ public class ParseTimetableService {
                 .limit(effectiveLimit)
                 .toList();
 
-        sample.stop(timer);
+        sample.stop(result.isEmpty() ? stationQueryNotFoundTimer : stationQueryFoundTimer);
         return result;
     }
 
@@ -435,15 +474,20 @@ public class ParseTimetableService {
      * @return the {@link TripDetail} if a matching trip is found, or {@link Optional#empty()} if not
      */
     public Optional<TripDetail> getTripDetail(String routeId, int directionId, Instant departureTime) {
+        Timer.Sample sample = Timer.start();
+
         final TimetableData snapshot = timetableData;
         final String key = routeId + "-" + directionId;
         final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
-        if (trips == null) return Optional.empty();
+        if (trips == null) {
+            sample.stop(tripQueryNotFoundTimer);
+            return Optional.empty();
+        }
 
         final LocalTime targetTime = departureTime.atZone(PRAGUE_ZONE).toLocalTime();
         final LocalDate today = getToday();
 
-        return trips.values().stream()
+        Optional<TripDetail> result = trips.values().stream()
                 .filter(stops -> stops.stream()
                         .anyMatch(s -> s.departureTime().equals(targetTime) || s.arrivalTime().equals(targetTime)))
                 .findFirst()
@@ -459,6 +503,9 @@ public class ParseTimetableService {
                     }
                     return new TripDetail(routeId, directionId, stops.getLast().stop().stopName(), tripStops);
                 });
+
+        sample.stop(result.isPresent() ? tripQueryFoundTimer : tripQueryNotFoundTimer);
+        return result;
     }
 
     // --- Package-private test support ---

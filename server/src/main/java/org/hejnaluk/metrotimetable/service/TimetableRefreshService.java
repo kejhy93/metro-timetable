@@ -1,5 +1,8 @@
 package org.hejnaluk.metrotimetable.service;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.client.PIDClient;
@@ -8,6 +11,10 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -15,6 +22,22 @@ public class TimetableRefreshService {
 
     private final PIDClient pidClient;
     private final ParseTimetableService parseTimetableService;
+    private final MeterRegistry meterRegistry;
+
+    private final Map<String, Counter> refreshCounters = new HashMap<>();
+
+    @PostConstruct
+    void registerMetrics() {
+        for (String trigger : List.of("startup", "scheduled", "manual")) {
+            for (String outcome : List.of("success", "failure")) {
+                refreshCounters.put(trigger + "." + outcome, Counter.builder("timetable.refresh.total")
+                        .description("Number of timetable refresh attempts by trigger and outcome")
+                        .tag("trigger", trigger)
+                        .tag("outcome", outcome)
+                        .register(meterRegistry));
+            }
+        }
+    }
 
     /**
      * Warm the cache on startup. Always parses after startup regardless of whether new data
@@ -23,8 +46,14 @@ public class TimetableRefreshService {
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         log.info("Application ready — warming timetable cache");
-        pidClient.getData();
-        parseTimetableService.parseTimetableFiles();
+        try {
+            pidClient.getData();
+            parseTimetableService.parseTimetableFiles();
+            refreshCounter("startup", "success").increment();
+        } catch (Exception e) {
+            refreshCounter("startup", "failure").increment();
+            throw e;
+        }
     }
 
     /**
@@ -36,11 +65,17 @@ public class TimetableRefreshService {
     @Scheduled(cron = "${pid.refresh.cron:0 0 4 * * *}")
     public void scheduledRefresh() {
         log.info("Scheduled timetable refresh triggered");
-        boolean newData = pidClient.getData();
-        if (newData) {
-            parseTimetableService.parseTimetableFiles();
-        } else {
-            log.info("No new GTFS data — skipping parse");
+        try {
+            boolean newData = pidClient.getData();
+            if (newData) {
+                parseTimetableService.parseTimetableFiles();
+            } else {
+                log.info("No new GTFS data — skipping parse");
+            }
+            refreshCounter("scheduled", "success").increment();
+        } catch (Exception e) {
+            refreshCounter("scheduled", "failure").increment();
+            throw e;
         }
     }
 
@@ -49,7 +84,17 @@ public class TimetableRefreshService {
      * Called by the manual refresh endpoint.
      */
     public void refresh() {
-        pidClient.getData();
-        parseTimetableService.parseTimetableFiles();
+        try {
+            pidClient.getData();
+            parseTimetableService.parseTimetableFiles();
+            refreshCounter("manual", "success").increment();
+        } catch (Exception e) {
+            refreshCounter("manual", "failure").increment();
+            throw e;
+        }
+    }
+
+    private Counter refreshCounter(String trigger, String outcome) {
+        return refreshCounters.get(trigger + "." + outcome);
     }
 }

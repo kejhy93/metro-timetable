@@ -1,5 +1,8 @@
 package org.hejnaluk.metrotimetable.client;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +42,17 @@ public class PIDClient {
     private final String pathToFile;
     private final RestClient restClient;
     private final File folder;
+    private final MeterRegistry meterRegistry;
+
+    private final Timer downloadTimer;
+    private final Counter downloadSkippedCounter;
+    private final Counter downloadSuccessCounter;
+    private final Counter downloadFailureCounter;
 
     @Autowired
-    public PIDClient(@Value("${pid.client.path:''}") String pathToFile) {
+    public PIDClient(@Value("${pid.client.path:''}") String pathToFile, MeterRegistry meterRegistry) {
         this.pathToFile = pathToFile;
+        this.meterRegistry = meterRegistry;
         log.info("Init PIDClient address is: {}", pathToFile);
         this.restClient = RestClient.builder()
                 .baseUrl(pathToFile)
@@ -59,6 +69,13 @@ public class PIDClient {
                 log.error("Failed to create folder {}", folder.getAbsolutePath());
             }
         }
+
+        downloadTimer = Timer.builder("gtfs.download.duration")
+                .description("Time taken to download the GTFS ZIP from the remote source")
+                .register(meterRegistry);
+        downloadSkippedCounter = downloadCounter("skipped");
+        downloadSuccessCounter = downloadCounter("success");
+        downloadFailureCounter = downloadCounter("failure");
     }
 
     /**
@@ -70,24 +87,40 @@ public class PIDClient {
         log.info("PIDClient address is: {}", pathToFile);
         if (!isDoClientCall()) {
             log.info("Client call is not needed");
+            downloadSkippedCounter.increment();
             return false;
         }
 
-        byte[] zipData = restClient.get()
-                .header(HttpHeaders.ACCEPT, "application/zip")
-                .retrieve()
-                .body(byte[].class);
+        try {
+            Timer.Sample downloadSample = Timer.start();
+            byte[] zipData = restClient.get()
+                    .header(HttpHeaders.ACCEPT, "application/zip")
+                    .retrieve()
+                    .body(byte[].class);
+            downloadSample.stop(downloadTimer);
 
-        log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
-        extractZip(zipData);
-        log.info("ZIP extraction completed");
+            log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
+            extractZip(zipData);
+            log.info("ZIP extraction completed");
 
-        filterStopTimes();
-        log.info("stop_times.txt pre-filtered");
+            filterStopTimes();
+            log.info("stop_times.txt pre-filtered");
 
-        writeSuccessful();
-        log.info("All files are downloaded and extracted successfully in memory!");
-        return true;
+            writeSuccessful();
+            log.info("All files are downloaded and extracted successfully in memory!");
+            downloadSuccessCounter.increment();
+            return true;
+        } catch (Exception e) {
+            downloadFailureCounter.increment();
+            throw e;
+        }
+    }
+
+    private Counter downloadCounter(String result) {
+        return Counter.builder("gtfs.download.total")
+                .description("Number of GTFS download attempts by result")
+                .tag("result", result)
+                .register(meterRegistry);
     }
 
     /**
