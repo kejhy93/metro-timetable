@@ -16,6 +16,8 @@ import java.time.ZonedDateTime;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class PIDClientTest {
@@ -30,7 +32,7 @@ class PIDClientTest {
     void setUp() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new PIDClient("http://localhost:" + server.getPort());
+        client = new PIDClient("http://localhost:" + server.getPort(), new SimpleMeterRegistry());
         Files.deleteIfExists(SYNC_FILE);
         Files.deleteIfExists(EXTRACTED_FILE);
     }
