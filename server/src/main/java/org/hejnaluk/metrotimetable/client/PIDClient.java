@@ -1,5 +1,7 @@
 package org.hejnaluk.metrotimetable.client;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +41,12 @@ public class PIDClient {
     private final String pathToFile;
     private final RestClient restClient;
     private final File folder;
+    private final MeterRegistry meterRegistry;
 
     @Autowired
-    public PIDClient(@Value("${pid.client.path:''}") String pathToFile) {
+    public PIDClient(@Value("${pid.client.path:''}") String pathToFile, MeterRegistry meterRegistry) {
         this.pathToFile = pathToFile;
+        this.meterRegistry = meterRegistry;
         log.info("Init PIDClient address is: {}", pathToFile);
         this.restClient = RestClient.builder()
                 .baseUrl(pathToFile)
@@ -73,10 +77,15 @@ public class PIDClient {
             return false;
         }
 
+        Timer downloadTimer = Timer.builder("gtfs.download.duration")
+                .description("Time taken to download the GTFS ZIP from the remote source")
+                .register(meterRegistry);
+        Timer.Sample downloadSample = Timer.start();
         byte[] zipData = restClient.get()
                 .header(HttpHeaders.ACCEPT, "application/zip")
                 .retrieve()
                 .body(byte[].class);
+        downloadSample.stop(downloadTimer);
 
         log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
         extractZip(zipData);
