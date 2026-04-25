@@ -1,5 +1,6 @@
 package org.hejnaluk.metrotimetable.client;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
@@ -74,29 +75,43 @@ public class PIDClient {
         log.info("PIDClient address is: {}", pathToFile);
         if (!isDoClientCall()) {
             log.info("Client call is not needed");
+            downloadCounter("skipped").increment();
             return false;
         }
 
-        Timer downloadTimer = Timer.builder("gtfs.download.duration")
-                .description("Time taken to download the GTFS ZIP from the remote source")
+        try {
+            Timer downloadTimer = Timer.builder("gtfs.download.duration")
+                    .description("Time taken to download the GTFS ZIP from the remote source")
+                    .register(meterRegistry);
+            Timer.Sample downloadSample = Timer.start();
+            byte[] zipData = restClient.get()
+                    .header(HttpHeaders.ACCEPT, "application/zip")
+                    .retrieve()
+                    .body(byte[].class);
+            downloadSample.stop(downloadTimer);
+
+            log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
+            extractZip(zipData);
+            log.info("ZIP extraction completed");
+
+            filterStopTimes();
+            log.info("stop_times.txt pre-filtered");
+
+            writeSuccessful();
+            log.info("All files are downloaded and extracted successfully in memory!");
+            downloadCounter("success").increment();
+            return true;
+        } catch (Exception e) {
+            downloadCounter("failure").increment();
+            throw e;
+        }
+    }
+
+    private Counter downloadCounter(String result) {
+        return Counter.builder("gtfs.download.total")
+                .description("Number of GTFS download attempts by result")
+                .tag("result", result)
                 .register(meterRegistry);
-        Timer.Sample downloadSample = Timer.start();
-        byte[] zipData = restClient.get()
-                .header(HttpHeaders.ACCEPT, "application/zip")
-                .retrieve()
-                .body(byte[].class);
-        downloadSample.stop(downloadTimer);
-
-        log.info("Received ZIP file of size: {}", Optional.ofNullable(zipData).map(data -> data.length).orElse(0));
-        extractZip(zipData);
-        log.info("ZIP extraction completed");
-
-        filterStopTimes();
-        log.info("stop_times.txt pre-filtered");
-
-        writeSuccessful();
-        log.info("All files are downloaded and extracted successfully in memory!");
-        return true;
     }
 
     /**
