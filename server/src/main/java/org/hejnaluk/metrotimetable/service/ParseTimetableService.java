@@ -306,16 +306,13 @@ public class ParseTimetableService {
      * @return list of upcoming {@link TrainDeparture}s sorted by departure time, or an empty list if the station is not found
      */
     public List<TrainDeparture> getTrainsForStation(String stationName, Integer direction, int limit, String routeId) {
-        Timer timer = Timer.builder("station.query")
-                .description("Time taken to query trains for a station")
-                .register(meterRegistry);
         Timer.Sample sample = Timer.start();
 
         // Snapshot once — guarantees a consistent route cache + station index pair.
         final TimetableData snapshot = timetableData;
         final Map<String, Integer> keyToStopIndex = snapshot.stationIndex().get(stationName.toLowerCase());
         if (keyToStopIndex == null) {
-            sample.stop(timer);
+            sample.stop(stationQueryTimer(false));
             return List.of();
         }
 
@@ -330,8 +327,15 @@ public class ParseTimetableService {
                 .limit(effectiveLimit)
                 .toList();
 
-        sample.stop(timer);
+        sample.stop(stationQueryTimer(!result.isEmpty()));
         return result;
+    }
+
+    private Timer stationQueryTimer(boolean found) {
+        return Timer.builder("station.query")
+                .description("Time taken to query trains for a station")
+                .tag("found", String.valueOf(found))
+                .register(meterRegistry);
     }
 
     /**
@@ -435,15 +439,20 @@ public class ParseTimetableService {
      * @return the {@link TripDetail} if a matching trip is found, or {@link Optional#empty()} if not
      */
     public Optional<TripDetail> getTripDetail(String routeId, int directionId, Instant departureTime) {
+        Timer.Sample sample = Timer.start();
+
         final TimetableData snapshot = timetableData;
         final String key = routeId + "-" + directionId;
         final ConcurrentSkipListMap<LocalTime, List<CompleteStop>> trips = snapshot.routeCache().get(key);
-        if (trips == null) return Optional.empty();
+        if (trips == null) {
+            sample.stop(tripQueryTimer(false));
+            return Optional.empty();
+        }
 
         final LocalTime targetTime = departureTime.atZone(PRAGUE_ZONE).toLocalTime();
         final LocalDate today = getToday();
 
-        return trips.values().stream()
+        Optional<TripDetail> result = trips.values().stream()
                 .filter(stops -> stops.stream()
                         .anyMatch(s -> s.departureTime().equals(targetTime) || s.arrivalTime().equals(targetTime)))
                 .findFirst()
@@ -459,6 +468,16 @@ public class ParseTimetableService {
                     }
                     return new TripDetail(routeId, directionId, stops.getLast().stop().stopName(), tripStops);
                 });
+
+        sample.stop(tripQueryTimer(result.isPresent()));
+        return result;
+    }
+
+    private Timer tripQueryTimer(boolean found) {
+        return Timer.builder("trip.query")
+                .description("Time taken to look up a trip detail")
+                .tag("found", String.valueOf(found))
+                .register(meterRegistry);
     }
 
     // --- Package-private test support ---
