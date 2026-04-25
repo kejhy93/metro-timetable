@@ -1,7 +1,9 @@
 package org.hejnaluk.metrotimetable.service;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import jakarta.annotation.PostConstruct;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -181,6 +184,19 @@ public class ParseTimetableService {
     }
 
     private volatile TimetableData timetableData = TimetableData.empty();
+    private volatile Instant lastRefreshTime = Instant.EPOCH;
+
+    @PostConstruct
+    void registerGauges() {
+        Gauge.builder("timetable.cache.age.seconds", this,
+                        s -> Duration.between(s.lastRefreshTime, Instant.now()).toSeconds())
+                .description("Seconds since the last successful timetable parse")
+                .register(meterRegistry);
+        Gauge.builder("timetable.cache.trips.total", this,
+                        s -> s.timetableData.routeCache().values().stream().mapToInt(Map::size).sum())
+                .description("Total number of trips currently loaded in the route cache")
+                .register(meterRegistry);
+    }
 
     /**
      * Downloads (if stale), parses all GTFS files, and atomically replaces the in-memory cache.
@@ -252,6 +268,7 @@ public class ParseTimetableService {
 
         // Atomic swap: readers always see a complete, consistent snapshot.
         timetableData = new TimetableData(newRouteCache, newStationIndex);
+        lastRefreshTime = Instant.now();
 
         cacheBuildTimeSample.stop(cacheBuildTimer);
         log.info("------------------------ CACHE DONE: {} route-direction keys, {} stations ------------------------",
