@@ -2,6 +2,8 @@ package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.MultiGauge;
+import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import lombok.Builder;
@@ -176,14 +178,17 @@ public class ParseTimetableService {
      */
     private record TimetableData(
             Map<String, ConcurrentSkipListMap<LocalTime, List<CompleteStop>>> routeCache,
-            Map<String, Map<String, Integer>> stationIndex
+            Map<String, Map<String, Integer>> stationIndex,
+            Map<String, String> routeNames
     ) {
         static TimetableData empty() {
-            return new TimetableData(Map.of(), Map.of());
+            return new TimetableData(Map.of(), Map.of(), Map.of());
         }
     }
 
     private volatile TimetableData timetableData = TimetableData.empty();
+    private MultiGauge tripGauge;
+
     /** Advanced only on a successful parse; reads from the cache-age gauge reflect the last good refresh. */
     private volatile Instant lastRefreshTime = Instant.EPOCH;
 
@@ -200,8 +205,7 @@ public class ParseTimetableService {
                         s -> Duration.between(s.lastRefreshTime, Instant.now()).toSeconds())
                 .description("Seconds since the last successful timetable parse")
                 .register(meterRegistry);
-        Gauge.builder("timetable.cache.trips", this,
-                        s -> s.timetableData.routeCache().values().stream().mapToInt(Map::size).sum())
+        tripGauge = MultiGauge.builder("timetable.cache.trips")
                 .description("Total number of trips currently loaded in the route cache")
                 .register(meterRegistry);
 
@@ -249,7 +253,8 @@ public class ParseTimetableService {
         final Set<String> activeServiceIds = parseActiveServiceIds(getToday());
         final var neededStopIdsFuture = CompletableFuture.supplyAsync(this::parseRouteStopIds);
         final var tripFuture = CompletableFuture.supplyAsync(() -> parseTrip(routeIds, activeServiceIds));
-        CompletableFuture.allOf(neededStopIdsFuture, tripFuture).join();
+        final var routeNamesFuture = CompletableFuture.supplyAsync(this::parseRouteNames);
+        CompletableFuture.allOf(neededStopIdsFuture, tripFuture, routeNamesFuture).join();
 
         final var neededStopIds = neededStopIdsFuture.join();
         final var tripList = tripFuture.join();
@@ -292,8 +297,9 @@ public class ParseTimetableService {
         }
 
         // Atomic swap: readers always see a complete, consistent snapshot.
-        timetableData = new TimetableData(newRouteCache, newStationIndex);
+        timetableData = new TimetableData(newRouteCache, newStationIndex, routeNamesFuture.join());
         lastRefreshTime = Instant.now();
+        updateTripGauge();
 
         cacheBuildTimeSample.stop(cacheBuildTimer);
         log.info("------------------------ CACHE DONE: {} route-direction keys, {} stations ------------------------",
@@ -530,7 +536,7 @@ public class ParseTimetableService {
                 stationIdx.computeIfAbsent(name, k -> new HashMap<>()).put(key, i);
             }
         }
-        timetableData = new TimetableData(routeCache, stationIdx);
+        timetableData = new TimetableData(routeCache, stationIdx, timetableData.routeNames());
     }
 
     /**
@@ -758,6 +764,40 @@ public class ParseTimetableService {
      *
      * @return the set of stop IDs referenced by the configured routes
      */
+    Map<String, String> parseRouteNames() {
+        try (Stream<String> lines = Files.lines(getRootPath().resolve(ROUTES_FILE_NAME))) {
+            return lines
+                    .skip(1)
+                    .map(line -> line.split(DELIMITER, ROUTE_ROUTE_LONG_NAME + 2))
+                    .filter(parts -> parts.length > ROUTE_ROUTE_LONG_NAME && routeIds.contains(parts[ROUTE_ROUTE_ID]))
+                    .collect(Collectors.toMap(
+                            parts -> parts[ROUTE_ROUTE_ID],
+                            parts -> parts[ROUTE_ROUTE_LONG_NAME].replace("\"", ""),
+                            (a, b) -> a
+                    ));
+        } catch (IOException e) {
+            log.error(ERROR_READING_FILE_ERROR_MESSAGE, ROUTES_FILE_NAME, e);
+            return Map.of();
+        }
+    }
+
+    private void updateTripGauge() {
+        final Map<String, String> routeNames = timetableData.routeNames();
+        tripGauge.register(
+                routeIds.stream()
+                        .map(routeId -> MultiGauge.Row.of(
+                                Tags.of("route", routeNames.getOrDefault(routeId, routeId)),
+                                routeId,
+                                id -> timetableData.routeCache().entrySet().stream()
+                                        .filter(e -> e.getKey().startsWith(id + "-"))
+                                        .mapToInt(e -> e.getValue().size())
+                                        .sum()
+                        ))
+                        .toList(),
+                true
+        );
+    }
+
     private Set<String> parseRouteStopIds() {
         try (Stream<String> lines = Files.lines(getRootPath().resolve(ROUTE_STOPS_FILE_NAME))) {
             return lines
