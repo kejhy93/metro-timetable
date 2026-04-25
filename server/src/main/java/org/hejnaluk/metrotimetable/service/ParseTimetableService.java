@@ -200,7 +200,7 @@ public class ParseTimetableService {
                         s -> Duration.between(s.lastRefreshTime, Instant.now()).toSeconds())
                 .description("Seconds since the last successful timetable parse")
                 .register(meterRegistry);
-        Gauge.builder("timetable.cache.trips.total", this,
+        Gauge.builder("timetable.cache.trips", this,
                         s -> s.timetableData.routeCache().values().stream().mapToInt(Map::size).sum())
                 .description("Total number of trips currently loaded in the route cache")
                 .register(meterRegistry);
