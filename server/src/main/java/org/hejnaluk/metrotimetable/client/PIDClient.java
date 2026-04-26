@@ -92,6 +92,7 @@ public class PIDClient {
         }
 
         try {
+            log.info("Downloading GTFS data from {}", pathToFile);
             Timer.Sample downloadSample = Timer.start();
             byte[] zipData = restClient.get()
                     .header(HttpHeaders.ACCEPT, "application/zip")
@@ -163,6 +164,8 @@ public class PIDClient {
                 final var nowZonedDateTime = ZonedDateTime.ofInstant(now, ZoneOffset.UTC).minusDays(daysOffset);
 
                 doClientCall = nowZonedDateTime.isAfter(parsedDateTime.orElse(ZonedDateTime.now()));
+                log.info("Sync file timestamp: {}, staleness threshold: {}, data is {}",
+                        syncString.trim(), nowZonedDateTime, doClientCall ? "stale — will re-download" : "fresh — skipping download");
             } else {
                 log.info("Synchronized file does not exist");
                 doClientCall = true;

@@ -51,6 +51,7 @@ public class TimetableRefreshService {
             parseTimetableService.parseTimetableFiles();
             refreshCounter("startup", "success").increment();
         } catch (Exception e) {
+            log.error("Startup timetable refresh failed", e);
             refreshCounter("startup", "failure").increment();
             throw e;
         }
@@ -74,6 +75,7 @@ public class TimetableRefreshService {
             }
             refreshCounter("scheduled", "success").increment();
         } catch (Exception e) {
+            log.error("Scheduled timetable refresh failed", e);
             refreshCounter("scheduled", "failure").increment();
             throw e;
         }
@@ -84,11 +86,13 @@ public class TimetableRefreshService {
      * Called by the manual refresh endpoint.
      */
     public void refresh() {
+        log.info("Manual timetable refresh triggered");
         try {
             pidClient.getData();
             parseTimetableService.parseTimetableFiles();
             refreshCounter("manual", "success").increment();
         } catch (Exception e) {
+            log.error("Manual timetable refresh failed", e);
             refreshCounter("manual", "failure").increment();
             throw e;
         }

@@ -251,6 +251,7 @@ public class ParseTimetableService {
         // Phase 1: Determine active services synchronously (two small files, ~ms),
         // then parse route stop IDs and trips in parallel.
         final Set<String> activeServiceIds = parseActiveServiceIds(getToday());
+        log.info("Active service IDs for {}: {}", getToday(), activeServiceIds.size());
         final var neededStopIdsFuture = CompletableFuture.supplyAsync(this::parseRouteStopIds);
         final var tripFuture = CompletableFuture.supplyAsync(() -> parseTrip(routeIds, activeServiceIds));
         final var routeNamesFuture = CompletableFuture.supplyAsync(this::parseRouteNames);
@@ -258,9 +259,11 @@ public class ParseTimetableService {
 
         final var neededStopIds = neededStopIdsFuture.join();
         final var tripList = tripFuture.join();
+        log.info("Loaded {} trips for routes {}", tripList.size(), routeIds);
 
         // Phase 2: Load only the stops that are actually referenced by the filtered route stops
         final var stopsMap = parseStops(neededStopIds);
+        log.info("Loaded {} stops", stopsMap.size());
 
         // Build tripId → cache key; small map, only relevant trips present.
         final Map<String, String> tripToKey = HashMap.newHashMap(tripList.size());
@@ -360,6 +363,7 @@ public class ParseTimetableService {
         final TimetableData snapshot = timetableData;
         final Map<String, Integer> keyToStopIndex = snapshot.stationIndex().get(stationName.toLowerCase());
         if (keyToStopIndex == null) {
+            log.debug("Station not found in index: '{}'", stationName);
             sample.stop(stationQueryNotFoundTimer);
             return List.of();
         }
@@ -510,6 +514,9 @@ public class ParseTimetableService {
                     return new TripDetail(routeId, directionId, stops.getLast().stop().stopName(), tripStops);
                 });
 
+        if (result.isEmpty()) {
+            log.debug("No trip found for routeId={}, directionId={}, time={}", routeId, directionId, targetTime);
+        }
         sample.stop(result.isPresent() ? tripQueryFoundTimer : tripQueryNotFoundTimer);
         return result;
     }
