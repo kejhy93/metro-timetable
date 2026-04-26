@@ -176,20 +176,50 @@ The dashboard JSON is at `grafana-dashboard/grafana.json`. Import it via **Dashb
 
 ### Local access
 
-To open Grafana against a local minikube cluster:
+To open Grafana against a local or remote cluster without an ingress:
 
 ```bash
-./port-forward-grafana.sh        # serves on http://localhost:3000
+./port-forward-grafana.sh        # serves on http://localhost:3001
 ./port-forward-grafana.sh 8080   # custom port
 ```
 
 Login: `admin` / `admin`.
 
-In production Grafana is exposed at `https://hejnaluk.dev/grafana` via a TLS ingress (`k8s/monitoring/grafana-ingress.yaml`).
+In production Grafana is exposed at `https://hejnaluk.dev/grafana` via a Traefik TLS ingress backed by a cert-manager `letsencrypt-prod` certificate.
 
-### Prometheus stack setup
+### Monitoring stack setup
 
-The monitoring stack (Prometheus Operator + Grafana) is expected to be installed in the `monitoring` namespace via the `kube-prometheus-stack` Helm chart. The `ServiceMonitor` carries the label `release: prometheus` so it is picked up by the operator automatically.
+The monitoring stack lives in a separate directory (`monitoring/k8s/`, outside this repo). It bundles:
+
+| Component | Role |
+|---|---|
+| `kube-prometheus-stack` | Prometheus Operator + Grafana + Alertmanager |
+| Loki (SingleBinary) | Log aggregation; filesystem storage, 30-day retention |
+| Promtail | Log shipper — collects pod logs and forwards them to Loki |
+
+Grafana is pre-configured with Loki as an additional data source, so metrics and logs are available in the same UI.
+
+**Deploy the stack:**
+
+```bash
+cd monitoring/k8s
+
+# Local (minikube) — port-forwards Grafana on http://localhost:3000 after install
+./deploy.sh --env local
+
+# Production (k3s on VPS) — applies TLS ingress at https://hejnaluk.dev/grafana
+./deploy.sh --env prod
+```
+
+The script installs/upgrades all three Helm releases in the `monitoring` namespace, then generates and applies Grafana dashboard ConfigMaps.
+
+**Dashboard workflow:**
+
+Dashboard JSON files live in `monitoring/k8s/dashboards/` (e.g. `metro-timetable.json`). `deploy.sh` converts each JSON to a Kubernetes ConfigMap via `dashboard-to-configmap.sh` and labels it `grafana_dashboard: "1"`. The `grafana-sc-dashboard` sidecar inside the Grafana pod watches for ConfigMaps with that label and loads them automatically; `deploy.sh` also restarts Grafana after applying changes to ensure they take effect.
+
+To update a dashboard: edit the JSON in `dashboards/`, then re-run `deploy.sh`.
+
+**ServiceMonitor:** Each project (including this one) applies its own `ServiceMonitor` pointing at this stack. The `ServiceMonitor` in `server/k8s/base/servicemonitor.yaml` carries the label `release: prometheus` so the Prometheus Operator picks it up automatically.
 
 ## UI (Kotlin Multiplatform)
 
