@@ -176,7 +176,7 @@ The dashboard JSON is at `grafana-dashboard/grafana.json`. Import it via **Dashb
 
 ### Local access
 
-To open Grafana against a local or remote cluster without an ingress:
+`deploy.sh --env local` automatically starts a blocking port-forward on `http://localhost:3000` after the install completes. To reconnect later (without re-running the full deploy), use the standalone script instead:
 
 ```bash
 ./port-forward-grafana.sh        # serves on http://localhost:3001
@@ -189,7 +189,14 @@ In production Grafana is exposed at `https://hejnaluk.dev/grafana` via a Traefik
 
 ### Monitoring stack setup
 
-The monitoring stack lives in a separate directory (`monitoring/k8s/`, outside this repo). It bundles:
+The monitoring stack lives in a separate repository — [github.com/kejhy93/monitoring](https://github.com/kejhy93/monitoring) — under the `k8s/` directory. Clone it alongside this repo before running the commands below.
+
+```bash
+git clone git@github.com:kejhy93/monitoring.git
+cd monitoring/k8s
+```
+
+It bundles:
 
 | Component | Role |
 |---|---|
