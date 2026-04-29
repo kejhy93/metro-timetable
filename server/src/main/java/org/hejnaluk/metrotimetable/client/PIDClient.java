@@ -31,7 +31,6 @@ import java.util.zip.ZipInputStream;
 public class PIDClient {
 
     public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
-    public static final String ROOT_PATH_FILE = "/tmp/timetable/";
 
     @Value("${pid.client.days.offset:7}")
     private int daysOffset;
@@ -40,6 +39,7 @@ public class PIDClient {
     private Set<String> routeIds;
 
     private final String pathToFile;
+    private final String rootPath;
     private final RestClient restClient;
     private final File folder;
     private final MeterRegistry meterRegistry;
@@ -50,15 +50,19 @@ public class PIDClient {
     private final Counter downloadFailureCounter;
 
     @Autowired
-    public PIDClient(@Value("${pid.client.path:''}") String pathToFile, MeterRegistry meterRegistry) {
+    public PIDClient(
+            @Value("${pid.client.path:''}") String pathToFile,
+            @Value("${pid.client.root.path:/tmp/timetable/}") String rootPath,
+            MeterRegistry meterRegistry) {
         this.pathToFile = pathToFile;
+        this.rootPath = rootPath;
         this.meterRegistry = meterRegistry;
         log.info("Init PIDClient address is: {}", pathToFile);
         this.restClient = RestClient.builder()
                 .baseUrl(pathToFile)
                 .build();
 
-        folder = Paths.get("/tmp", "/timetable").toFile();
+        folder = Paths.get(rootPath).toFile();
         if (folder.exists() && folder.isDirectory()) {
             log.info("Folder {} exists", folder.getAbsolutePath());
         } else {
@@ -267,7 +271,7 @@ public class PIDClient {
     }
 
     /**
-     * Extracts all non-directory entries from a ZIP byte array into {@link #ROOT_PATH_FILE}.
+     * Extracts all non-directory entries from a ZIP byte array into the configured root path.
      * <p>
      * Each entry is written using its bare filename (directory components are stripped),
      * so nested ZIP paths are flattened into the single target directory.

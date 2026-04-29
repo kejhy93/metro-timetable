@@ -33,14 +33,15 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.hejnaluk.metrotimetable.client.PIDClient.ROOT_PATH_FILE;
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ParseTimetableService {
 
     private final MeterRegistry meterRegistry;
+
+    @Value("${pid.client.root.path:/tmp/timetable/}")
+    private String rootPath;
 
     /**
      * Get path to the file containing routes information
@@ -337,7 +338,7 @@ public class ParseTimetableService {
      * @return path to the directory containing the GTFS text files
      */
     protected Path getRootPath() {
-        return Path.of(ROOT_PATH_FILE);
+        return Path.of(rootPath);
     }
 
     /**
