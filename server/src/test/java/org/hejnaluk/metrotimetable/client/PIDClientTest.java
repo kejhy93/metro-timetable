@@ -32,7 +32,7 @@ class PIDClientTest {
     void setUp() throws IOException {
         server = new MockWebServer();
         server.start();
-        client = new PIDClient("http://localhost:" + server.getPort(), new SimpleMeterRegistry());
+        client = new PIDClient("http://localhost:" + server.getPort(), "/tmp/timetable/", new SimpleMeterRegistry());
         Files.deleteIfExists(SYNC_FILE);
         Files.deleteIfExists(EXTRACTED_FILE);
     }
