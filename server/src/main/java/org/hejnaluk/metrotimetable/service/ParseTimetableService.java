@@ -7,13 +7,12 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import lombok.Builder;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.config.PidClientProperties;
 import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.hejnaluk.metrotimetable.dto.TripDetail;
 import org.hejnaluk.metrotimetable.dto.TripStop;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -33,10 +32,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.hejnaluk.metrotimetable.client.PIDClient.ROOT_PATH_FILE;
-
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ParseTimetableService {
 
@@ -81,11 +77,16 @@ public class ParseTimetableService {
     /**
      * Expected set of routes to be parsed
      */
-    @Value("${pid.client.routes.ids:}")
     public final Set<String> routeIds;
-
-    @Value("${pid.client.station.max-limit:15}")
     private int maxLimit;
+    private String rootPath;
+
+    public ParseTimetableService(MeterRegistry meterRegistry, PidClientProperties properties) {
+        this.meterRegistry = meterRegistry;
+        this.routeIds = properties.getRouteIds();
+        this.maxLimit = properties.getStation().getMaxLimit();
+        this.rootPath = properties.getRootPath();
+    }
 
     /**
      * route_id,direction_id,stop_id,stop_sequence
@@ -337,7 +338,7 @@ public class ParseTimetableService {
      * @return path to the directory containing the GTFS text files
      */
     protected Path getRootPath() {
-        return Path.of(ROOT_PATH_FILE);
+        return Path.of(rootPath);
     }
 
     /**
