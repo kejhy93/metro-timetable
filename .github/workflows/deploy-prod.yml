@@ -139,7 +139,7 @@ jobs:
         run: echo "value=sha-${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
 
       - name: Deploy server to VPS via SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           IMAGE_TAG: ${{ steps.image-tag.outputs.value }}
           REF_NAME: ${{ github.ref_name }}
@@ -162,7 +162,7 @@ jobs:
 
     steps:
       - name: Deploy UI to VPS via SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           REF_NAME: ${{ github.ref_name }}
           IMAGE_SHA: ${{ github.sha }}
