@@ -33,7 +33,7 @@ jobs:
     steps:
       # Checkout the code
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Set up JDK (use your desired version)
       - name: Set up JDK 25
