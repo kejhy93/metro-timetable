@@ -1,6 +1,7 @@
 package org.hejnaluk.metrotimetable.service;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.hejnaluk.metrotimetable.config.PidClientProperties;
 import org.hejnaluk.metrotimetable.dto.LineInfo;
 import org.hejnaluk.metrotimetable.dto.TrainDeparture;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,7 +47,9 @@ class ParseTimetableServiceTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new ParseTimetableService(new SimpleMeterRegistry(), Set.of()) {
+        PidClientProperties props = new PidClientProperties();
+        props.setRouteIds(Set.of());
+        service = new ParseTimetableService(new SimpleMeterRegistry(), props) {
             @Override
             protected LocalTime getNow() {
                 return FIXED_NOW;

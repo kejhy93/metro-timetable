@@ -24,12 +24,18 @@ public class TimetableRefreshService {
     private final ParseTimetableService parseTimetableService;
     private final MeterRegistry meterRegistry;
 
+    private static final String TRIGGER_STARTUP = "startup";
+    private static final String TRIGGER_SCHEDULED = "scheduled";
+    private static final String TRIGGER_MANUAL = "manual";
+    private static final String OUTCOME_SUCCESS = "success";
+    private static final String OUTCOME_FAILURE = "failure";
+
     private final Map<String, Counter> refreshCounters = new HashMap<>();
 
     @PostConstruct
     void registerMetrics() {
-        for (String trigger : List.of("startup", "scheduled", "manual")) {
-            for (String outcome : List.of("success", "failure")) {
+        for (String trigger : List.of(TRIGGER_STARTUP, TRIGGER_SCHEDULED, TRIGGER_MANUAL)) {
+            for (String outcome : List.of(OUTCOME_SUCCESS, OUTCOME_FAILURE)) {
                 refreshCounters.put(trigger + "." + outcome, Counter.builder("timetable.refresh.total")
                         .description("Number of timetable refresh attempts by trigger and outcome")
                         .tag("trigger", trigger)
@@ -49,9 +55,9 @@ public class TimetableRefreshService {
         try {
             pidClient.getData();
             parseTimetableService.parseTimetableFiles();
-            refreshCounter("startup", "success").increment();
+            refreshCounter(TRIGGER_STARTUP, OUTCOME_SUCCESS).increment();
         } catch (Exception e) {
-            refreshCounter("startup", "failure").increment();
+            refreshCounter(TRIGGER_STARTUP, OUTCOME_FAILURE).increment();
             throw e;
         }
     }
@@ -72,9 +78,9 @@ public class TimetableRefreshService {
             } else {
                 log.info("No new GTFS data — skipping parse");
             }
-            refreshCounter("scheduled", "success").increment();
+            refreshCounter(TRIGGER_SCHEDULED, OUTCOME_SUCCESS).increment();
         } catch (Exception e) {
-            refreshCounter("scheduled", "failure").increment();
+            refreshCounter(TRIGGER_SCHEDULED, OUTCOME_FAILURE).increment();
             throw e;
         }
     }
@@ -87,9 +93,9 @@ public class TimetableRefreshService {
         try {
             pidClient.getData();
             parseTimetableService.parseTimetableFiles();
-            refreshCounter("manual", "success").increment();
+            refreshCounter(TRIGGER_MANUAL, OUTCOME_SUCCESS).increment();
         } catch (Exception e) {
-            refreshCounter("manual", "failure").increment();
+            refreshCounter(TRIGGER_MANUAL, OUTCOME_FAILURE).increment();
             throw e;
         }
     }

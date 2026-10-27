@@ -4,9 +4,9 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.hejnaluk.metrotimetable.config.PidClientProperties;
 import org.hejnaluk.metrotimetable.exception.WriteSyncFileException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -31,14 +31,9 @@ import java.util.zip.ZipInputStream;
 public class PIDClient {
 
     public static final String SYNCHRONIZED_FILE_NAME = "synchronized.txt";
-    public static final String ROOT_PATH_FILE = "/tmp/timetable/";
 
-    @Value("${pid.client.days.offset:7}")
-    private int daysOffset;
-
-    @Value("${pid.client.routes.ids:}")
-    private Set<String> routeIds;
-
+    private final int daysOffset;
+    private final Set<String> routeIds;
     private final String pathToFile;
     private final RestClient restClient;
     private final File folder;
@@ -50,15 +45,17 @@ public class PIDClient {
     private final Counter downloadFailureCounter;
 
     @Autowired
-    public PIDClient(@Value("${pid.client.path:''}") String pathToFile, MeterRegistry meterRegistry) {
-        this.pathToFile = pathToFile;
+    public PIDClient(PidClientProperties properties, MeterRegistry meterRegistry) {
+        this.pathToFile = properties.getPath();
+        this.daysOffset = properties.getDaysOffset();
+        this.routeIds = properties.getRouteIds();
         this.meterRegistry = meterRegistry;
         log.info("Init PIDClient address is: {}", pathToFile);
         this.restClient = RestClient.builder()
                 .baseUrl(pathToFile)
                 .build();
 
-        folder = Paths.get("/tmp", "/timetable").toFile();
+        folder = Paths.get(properties.getRootPath()).toFile();
         if (folder.exists() && folder.isDirectory()) {
             log.info("Folder {} exists", folder.getAbsolutePath());
         } else {
@@ -267,7 +264,7 @@ public class PIDClient {
     }
 
     /**
-     * Extracts all non-directory entries from a ZIP byte array into {@link #ROOT_PATH_FILE}.
+     * Extracts all non-directory entries from a ZIP byte array into the configured root path.
      * <p>
      * Each entry is written using its bare filename (directory components are stripped),
      * so nested ZIP paths are flattened into the single target directory.
