@@ -116,7 +116,7 @@ jobs:
         run: ./gradlew :composeApp:packageUberJarForCurrentOS
 
       - name: Upload desktop JAR artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-jar
           path: ui/composeApp/build/compose/jars/*.jar
@@ -187,7 +187,7 @@ jobs:
 
     steps:
       - name: Download desktop JAR artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: desktop-jar
           path: jars/
