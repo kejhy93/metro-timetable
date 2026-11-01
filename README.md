@@ -5,6 +5,7 @@
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=kejhy93_metro-timetable&metric=bugs)](https://sonarcloud.io/summary/new_code?id=kejhy93_metro-timetable)
 [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=kejhy93_metro-timetable&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=kejhy93_metro-timetable)
 
+![Alt](https://repobeats.axiom.co/api/embed/1c2519e67d05d487f9b32b9471ea9dc884ab8e16.svg "Repobeats analytics image")
 
 # Metro Timetable
 
